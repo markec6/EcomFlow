@@ -7,8 +7,7 @@ const CREDIT_EVENT = "ecomflow-credits-sync"
 const PROFILE_EVENT = "ecomflow-profile-sync"
 const MAX_CREDITS = 1000
 const GUEST_DEFAULT_CREDITS = 3
-
-let guestCredits = GUEST_DEFAULT_CREDITS
+const GUEST_CREDIT_KEY = "guest_credits"
 
 type ProfileSummary = {
   fullName: string | null
@@ -43,6 +42,16 @@ export function useAiCredits() {
     setCredits(next)
   }
 
+  const getGuestCredits = () => {
+    const raw = window.localStorage.getItem(GUEST_CREDIT_KEY)
+    if (!raw) {
+      window.localStorage.setItem(GUEST_CREDIT_KEY, String(GUEST_DEFAULT_CREDITS))
+      return GUEST_DEFAULT_CREDITS
+    }
+    const parsed = Number(raw)
+    return Number.isFinite(parsed) ? Math.max(0, Math.min(GUEST_DEFAULT_CREDITS, parsed)) : GUEST_DEFAULT_CREDITS
+  }
+
   const syncCreditsFromSession = async () => {
     const supabase = getAuthClient()
     const { data } = await supabase.auth.getSession()
@@ -52,7 +61,7 @@ export function useAiCredits() {
       setUserId(null)
       setUserEmail(null)
       setProfile({ fullName: null, username: null, avatarUrl: null })
-      commitCredits(guestCredits)
+      commitCredits(getGuestCredits())
       setIsReady(true)
       return
     }
@@ -100,7 +109,7 @@ export function useAiCredits() {
     const normalized = Math.max(0, Math.min(MAX_CREDITS, Math.round(nextValue)))
     commitCredits(normalized)
     if (isGuest || !userId) {
-      guestCredits = normalized
+      window.localStorage.setItem(GUEST_CREDIT_KEY, String(Math.min(GUEST_DEFAULT_CREDITS, normalized)))
     } else {
       const supabase = getAuthClient()
       await supabase.from("profiles").update({ ai_credits_remaining: normalized }).eq("id", userId)

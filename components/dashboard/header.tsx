@@ -170,7 +170,7 @@ export function Header({ searchQuery, onSearchChange }: HeaderProps) {
           </div>
         ) : (
           <button
-            onClick={() => router.push("/sign-up")}
+            onClick={() => router.push("/signup")}
             className="px-3 py-1.5 rounded-xl bg-gradient-to-r from-violet-600 to-purple-500 text-white text-xs font-semibold hover:opacity-95"
           >
             Sign up for 300 credits
@@ -273,19 +273,26 @@ export function Header({ searchQuery, onSearchChange }: HeaderProps) {
                 </div>
               ) : (
                 <button
-                  onClick={() => router.push("/sign-up")}
+                  onClick={() => router.push("/signup")}
                   className="w-full rounded-xl bg-gradient-to-r from-violet-600 to-purple-500 px-3 py-2 text-sm font-semibold text-white"
                 >
                   Sign up for 300 credits
                 </button>
               )}
 
-              {!isGuest && (
+              {!isGuest ? (
                 <button
                   onClick={() => router.push("/settings")}
                   className="w-full rounded-xl border border-white/10 px-3 py-2 text-sm text-foreground"
                 >
                   Open Settings
+                </button>
+              ) : (
+                <button
+                  onClick={() => router.push("/login")}
+                  className="w-full rounded-xl border border-white/10 px-3 py-2 text-sm text-foreground"
+                >
+                  Login
                 </button>
               )}
             </div>
