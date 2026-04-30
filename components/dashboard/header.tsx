@@ -1,11 +1,12 @@
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
+import { memo, useEffect, useMemo, useState } from "react"
 import { AnimatePresence, motion } from "framer-motion"
 import { Search, Bell, Command, Zap, LogOut, UserCircle2, Settings, Menu } from "lucide-react"
 import { clearClientSessionData, useAiCredits } from "@/hooks/use-ai-credits"
-import { getAuthClient } from "@/lib/supabase/auth-client"
+import { useAuth } from "@clerk/nextjs"
 import { useRouter } from "next/navigation"
+import { useIsMobile } from "@/hooks/use-mobile"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -21,60 +22,29 @@ interface HeaderProps {
   onSearchChange: (value: string) => void
 }
 
-export function Header({ searchQuery, onSearchChange }: HeaderProps) {
+export const Header = memo(function Header({ searchQuery, onSearchChange }: HeaderProps) {
   const router = useRouter()
+  const { signOut } = useAuth()
   const { credits, isGuest, userEmail, profile } = useAiCredits()
+  const isMobile = useIsMobile()
   const supabaseConfigured = Boolean(process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY)
   const sessionValid = !isGuest
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null)
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
 
   useEffect(() => {
-    const supabase = getAuthClient()
-    const loadAvatarFromProfiles = async () => {
-      const { data } = await supabase.auth.getSession()
-      const userId = data.session?.user?.id
-      if (!userId) {
-        setAvatarUrl(null)
-        return
-      }
-      const { data: profileData } = await supabase
-        .from("profiles")
-        .select("avatar_url")
-        .eq("id", userId)
-        .single()
-      setAvatarUrl((profileData?.avatar_url as string | null | undefined) ?? null)
-    }
-
-    void loadAvatarFromProfiles()
-    const { data: authListener } = supabase.auth.onAuthStateChange(() => {
-      void loadAvatarFromProfiles()
-    })
+    setAvatarUrl(profile.avatarUrl ?? null)
     const profileEventListener = () => {
-      void loadAvatarFromProfiles()
+      setAvatarUrl(profile.avatarUrl ?? null)
     }
-    window.addEventListener(PROFILE_EVENT, profileEventListener)
-    const profileChannel = supabase
-      .channel("profiles-avatar-sync")
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "profiles" },
-        () => {
-          void loadAvatarFromProfiles()
-        }
-      )
-      .subscribe()
-
+    window.addEventListener(PROFILE_EVENT, profileEventListener, { passive: true })
     return () => {
-      authListener.subscription.unsubscribe()
       window.removeEventListener(PROFILE_EVENT, profileEventListener)
-      void supabase.removeChannel(profileChannel)
     }
-  }, [])
+  }, [profile.avatarUrl])
 
   const handleLogout = async () => {
-    const supabase = getAuthClient()
-    await supabase.auth.signOut({ scope: "global" })
+    await signOut()
     clearClientSessionData()
     toast.success("Logged out successfully.")
     window.location.href = "/login"
@@ -108,11 +78,11 @@ export function Header({ searchQuery, onSearchChange }: HeaderProps) {
   )
 
   return (
-    <header className="fixed top-0 left-14 sm:left-16 right-0 h-16 flex items-center gap-3 px-3 sm:px-4 md:px-6 glass border-b border-border/70 z-40">
+    <header className="fixed top-0 left-14 sm:left-16 right-0 h-16 flex items-center gap-3 px-3 sm:px-4 md:px-6 glass max-md:bg-card/95 border-b border-border/70 z-40 will-change-transform [transform:translateZ(0)]">
       {/* Centered Search */}
       <motion.div
-        initial={{ y: -20, opacity: 0 }}
-        animate={{ y: 0, opacity: 1 }}
+        initial={isMobile ? false : { y: -20, opacity: 0 }}
+        animate={isMobile ? undefined : { y: 0, opacity: 1 }}
         className="flex-1 min-w-0 max-w-3xl mx-auto"
       >
         <div className="relative group">
@@ -136,7 +106,7 @@ export function Header({ searchQuery, onSearchChange }: HeaderProps) {
       <button
         type="button"
         onClick={() => setIsMobileMenuOpen((open) => !open)}
-        className="lg:hidden relative w-10 h-10 shrink-0 rounded-xl glass-panel border border-primary/30 flex items-center justify-center text-primary"
+        className="lg:hidden relative w-11 h-11 shrink-0 rounded-xl glass-panel border border-primary/30 flex items-center justify-center text-primary touch-manipulation"
         aria-label="Open mobile account menu"
       >
         <Menu className="w-5 h-5" />
@@ -144,8 +114,8 @@ export function Header({ searchQuery, onSearchChange }: HeaderProps) {
 
       {/* Right section */}
       <motion.div
-        initial={{ x: 20, opacity: 0 }}
-        animate={{ x: 0, opacity: 1 }}
+        initial={isMobile ? false : { x: 20, opacity: 0 }}
+        animate={isMobile ? undefined : { x: 0, opacity: 1 }}
         className="hidden lg:flex items-center gap-4"
       >
         <div className={`flex items-center gap-2 px-3 py-1.5 rounded-xl glass-panel border ${supabaseConfigured ? "border-emerald-400/20" : "border-rose-400/20"}`}>
@@ -172,7 +142,7 @@ export function Header({ searchQuery, onSearchChange }: HeaderProps) {
         ) : (
           <button
             onClick={() => router.push("/sign-up")}
-            className="px-3 py-1.5 rounded-xl bg-gradient-to-r from-violet-600 to-purple-500 text-white text-xs font-semibold hover:opacity-95"
+            className="px-3 py-1.5 min-h-11 rounded-xl bg-gradient-to-r from-violet-600 to-purple-500 text-white text-xs font-semibold hover:opacity-95 touch-manipulation"
           >
             Sign up for 300 credits
           </button>
@@ -180,9 +150,9 @@ export function Header({ searchQuery, onSearchChange }: HeaderProps) {
 
         {/* Notification Bell */}
         <motion.button
-          whileHover={{ scale: 1.06, y: -1 }}
+          whileHover={isMobile ? undefined : { scale: 1.06, y: -1 }}
           whileTap={{ scale: 0.96 }}
-          className="relative w-10 h-10 rounded-xl glass-panel soft-hover flex items-center justify-center"
+          className="relative w-11 h-11 rounded-xl glass-panel soft-hover flex items-center justify-center touch-manipulation"
         >
           <Bell className="w-4 h-4 text-muted-foreground" />
           {/* Red dot with pulse */}
@@ -192,7 +162,7 @@ export function Header({ searchQuery, onSearchChange }: HeaderProps) {
         {/* Profile Avatar with Pro ring */}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <motion.button whileHover={{ scale: 1.05 }} className="relative">
+            <motion.button whileHover={isMobile ? undefined : { scale: 1.05 }} className="relative touch-manipulation">
               <div className="absolute -inset-0.5 rounded-full bg-gradient-to-r from-primary to-violet-400 animate-pulse opacity-75" />
               <div className="relative w-10 h-10 rounded-full bg-card border-2 border-background overflow-hidden">
                 {avatarNode}
@@ -210,17 +180,17 @@ export function Header({ searchQuery, onSearchChange }: HeaderProps) {
             </div>
             {!isGuest ? (
               <>
-                <DropdownMenuItem onClick={() => router.push("/settings")} className="text-foreground">
+                <DropdownMenuItem onClick={() => router.push("/settings")} className="text-foreground min-h-11 touch-manipulation">
                   <Settings className="w-4 h-4" />
                   Settings
                 </DropdownMenuItem>
-                <DropdownMenuItem onClick={handleLogout} className="text-foreground">
+                <DropdownMenuItem onClick={handleLogout} className="text-foreground min-h-11 touch-manipulation">
                   <LogOut className="w-4 h-4" />
                   Logout
                 </DropdownMenuItem>
               </>
             ) : (
-              <DropdownMenuItem onClick={() => router.push("/login")} className="text-foreground">
+              <DropdownMenuItem onClick={() => router.push("/login")} className="text-foreground min-h-11 touch-manipulation">
                 <UserCircle2 className="w-4 h-4" />
                 Log in
               </DropdownMenuItem>
@@ -232,11 +202,11 @@ export function Header({ searchQuery, onSearchChange }: HeaderProps) {
       <AnimatePresence>
         {isMobileMenuOpen && (
           <motion.div
-            initial={{ opacity: 0, y: -12, scale: 0.98 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: -10, scale: 0.98 }}
-            transition={{ duration: 0.18, ease: "easeOut" }}
-            className="lg:hidden absolute top-full right-2 mt-2 w-[min(22rem,calc(100vw-5rem))] rounded-2xl border border-white/10 bg-slate-950/95 backdrop-blur-xl p-4 shadow-[0_18px_60px_rgba(2,6,23,0.45)]"
+            initial={isMobile ? { opacity: 0, y: -6 } : { opacity: 0, y: -12, scale: 0.98 }}
+            animate={isMobile ? { opacity: 1, y: 0 } : { opacity: 1, y: 0, scale: 1 }}
+            exit={isMobile ? { opacity: 0, y: -4 } : { opacity: 0, y: -10, scale: 0.98 }}
+            transition={{ duration: 0.12, ease: "easeOut" }}
+            className="lg:hidden absolute top-full right-2 mt-2 w-[min(22rem,calc(100vw-5rem))] rounded-2xl border border-white/10 bg-slate-950/95 p-4 shadow-[0_18px_60px_rgba(2,6,23,0.45)] will-change-transform [transform:translateZ(0)]"
           >
             <div className="flex items-center gap-3 pb-3 border-b border-white/10">
               <div className="relative w-12 h-12 rounded-full overflow-hidden border border-primary/30 bg-zinc-800">
@@ -275,7 +245,7 @@ export function Header({ searchQuery, onSearchChange }: HeaderProps) {
               ) : (
                 <button
                   onClick={() => router.push("/sign-up")}
-                  className="w-full rounded-xl bg-gradient-to-r from-violet-600 to-purple-500 px-3 py-2 text-sm font-semibold text-white"
+                  className="w-full min-h-11 rounded-xl bg-gradient-to-r from-violet-600 to-purple-500 px-3 py-2 text-sm font-semibold text-white touch-manipulation"
                 >
                   Sign up for 300 credits
                 </button>
@@ -284,14 +254,14 @@ export function Header({ searchQuery, onSearchChange }: HeaderProps) {
               {!isGuest ? (
                 <button
                   onClick={() => router.push("/settings")}
-                  className="w-full rounded-xl border border-white/10 px-3 py-2 text-sm text-foreground"
+                  className="w-full min-h-11 rounded-xl border border-white/10 px-3 py-2 text-sm text-foreground touch-manipulation"
                 >
                   Open Settings
                 </button>
               ) : (
                 <button
                   onClick={() => router.push("/login")}
-                  className="w-full rounded-xl border border-white/10 px-3 py-2 text-sm text-foreground"
+                  className="w-full min-h-11 rounded-xl border border-white/10 px-3 py-2 text-sm text-foreground touch-manipulation"
                 >
                   Login
                 </button>
@@ -302,4 +272,4 @@ export function Header({ searchQuery, onSearchChange }: HeaderProps) {
       </AnimatePresence>
     </header>
   )
-}
+})

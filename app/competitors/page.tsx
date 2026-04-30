@@ -19,7 +19,6 @@ import {
   YAxis,
 } from "recharts"
 import { fetchProductsFromSupabase, getActiveProductId, seedProducts, setActiveProductId } from "@/lib/products-engine"
-import { getAuthClient } from "@/lib/supabase/auth-client"
 import { getSupabaseClient } from "@/lib/supabase/client"
 import { toast } from "sonner"
 import { useRouter } from "next/navigation"
@@ -42,7 +41,7 @@ const trafficColors = ["#8B5CF6", "#A78BFA", "#22C55E", "#06B6D4"]
 
 export default function CompetitorsPage() {
   const router = useRouter()
-  const { setCredits, decrementCredit } = useAiCredits()
+  const { setCredits, decrementCredit, userId: activeUserId } = useAiCredits()
   const [searchQuery, setSearchQuery] = useState("")
   const [products, setProducts] = useState<typeof seedProducts>([])
   const [selectedProductId, setSelectedProductId] = useState("")
@@ -116,14 +115,12 @@ export default function CompetitorsPage() {
   const handleDeepScan = async (rowId: string) => {
     if (scanningRows[rowId] || isRedirecting) return
     setScanningRows((current) => ({ ...current, [rowId]: true }))
-    const auth = getAuthClient()
     const client = getSupabaseClient()
     if (!client) {
       setScanningRows((current) => ({ ...current, [rowId]: false }))
       return
     }
-    const { data: userData } = await auth.auth.getUser()
-    if (!userData.user?.id) {
+    if (!activeUserId) {
       const creditSpent = await decrementCredit()
       if (!creditSpent) {
         setScanningRows((current) => ({ ...current, [rowId]: false }))
@@ -139,8 +136,7 @@ export default function CompetitorsPage() {
       }
       return
     }
-    const userId = userData.user.id
-    const result = await spendCreditForProductScan(client, userId, selectedProductId)
+    const result = await spendCreditForProductScan(client, activeUserId, selectedProductId)
 
     if (!result.ok) {
       if (result.reason === "duplicate") {
@@ -158,8 +154,6 @@ export default function CompetitorsPage() {
     toast.success("Analyzing product... 1 credit used.")
     if (selectedProductId) {
       setIsRedirecting(true)
-      await auth.auth.getSession()
-      router.refresh()
       window.location.href = `/products/${selectedProductId}`
       return
     }
@@ -388,7 +382,7 @@ export default function CompetitorsPage() {
                         <button
                           onClick={() => handleDeepScan(rowId)}
                           disabled={isScanning}
-                          className="px-3 py-1.5 rounded-lg border border-primary/40 text-primary hover:bg-primary hover:text-white disabled:opacity-70 disabled:cursor-not-allowed transition-colors duration-200 inline-flex items-center gap-1.5"
+                          className="px-3 py-1.5 min-h-11 rounded-lg border border-primary/40 text-primary hover:bg-primary hover:text-white disabled:opacity-70 disabled:cursor-not-allowed transition-colors duration-200 inline-flex items-center gap-1.5 touch-manipulation"
                         >
                           {isScanning && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
                           {isScanning ? "Processing..." : "Deep Scan"}
@@ -404,7 +398,7 @@ export default function CompetitorsPage() {
       </main>
 
       {isRedirecting && (
-        <div className="fixed inset-0 z-[90] bg-black/60 backdrop-blur-sm flex items-center justify-center">
+        <div className="fixed inset-0 z-[90] bg-black/60 max-md:bg-black/75 flex items-center justify-center">
           <div className="rounded-xl border border-primary/30 bg-slate-950/90 px-5 py-3 text-sm text-foreground">
             Processing...
           </div>
@@ -427,7 +421,7 @@ export default function CompetitorsPage() {
         </DialogContent>
       </Dialog>
 
-      <div className="fixed inset-0 pointer-events-none -z-0">
+      <div className="fixed inset-0 pointer-events-none -z-0 max-md:hidden">
         <motion.div
           className="absolute -top-28 left-1/4 w-[30rem] h-[30rem] rounded-full blur-[130px] bg-violet-500/20"
           animate={{ x: [0, 40, -20, 0], y: [0, -20, 25, 0] }}

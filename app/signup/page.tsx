@@ -1,129 +1,103 @@
 "use client"
 
 import Link from "next/link"
-import { FormEvent, useEffect, useMemo, useState } from "react"
+import { FormEvent, useMemo, useState } from "react"
 import { AnimatePresence, motion } from "framer-motion"
 import { Eye, EyeOff, Loader2, Mail } from "lucide-react"
 import { toast } from "sonner"
-import { getAuthClient } from "@/lib/supabase/auth-client"
+import { useSignUp } from "@clerk/nextjs"
 import { clearClientSessionData } from "@/hooks/use-ai-credits"
-import { getURL } from "@/lib/site-url"
+import { getSupabaseClient } from "@/lib/supabase/client"
 
 export default function SignupPage() {
-  const [mode, setMode] = useState<"email" | "magic">("email")
-  const [username, setUsername] = useState("")
+  const { isLoaded, signUp, setActive } = useSignUp()
+  const [username, setUsername] = useState<string>("")
   const [fullName, setFullName] = useState("")
   const [birthDate, setBirthDate] = useState("")
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
+  const [verificationCode, setVerificationCode] = useState("")
+  const [pendingVerification, setPendingVerification] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
   const [loading, setLoading] = useState(false)
   const [redirecting, setRedirecting] = useState(false)
   const [focused, setFocused] = useState<"username" | "email" | "password" | "birthDate" | null>(null)
-  const [usernameTaken, setUsernameTaken] = useState(false)
 
   const passwordTooShort = useMemo(() => password.length > 0 && password.length < 8, [password])
 
-  useEffect(() => {
-    if (!username.trim()) {
-      setUsernameTaken(false)
-      return
-    }
-    const timer = window.setTimeout(async () => {
-      const supabase = getAuthClient()
-      const { data } = await supabase.from("profiles").select("id").eq("username", username.trim()).limit(1)
-      setUsernameTaken(Boolean(data?.length))
-    }, 350)
-    return () => window.clearTimeout(timer)
-  }, [username])
+  const syncProfileToSupabase = async (clerkUserId: string) => {
+    const client = getSupabaseClient()
+    if (!client) return
+    const defaultCredits = email.trim().toLowerCase() === "marjanovica773@gmail.com" ? 420 : 300
+    await client.from("profiles").upsert(
+      {
+        id: clerkUserId,
+        email: email.trim(),
+        username: username.trim(),
+        full_name: fullName.trim() || null,
+        birth_date: birthDate || null,
+        ai_credits_remaining: defaultCredits,
+      },
+      { onConflict: "id" }
+    )
+  }
 
   const onSignup = async (event: FormEvent) => {
     event.preventDefault()
+    if (!isLoaded || !signUp) return
     if (!username.trim()) return toast.error("Username is required.")
     if (!birthDate) return toast.error("Date of birth is required.")
     if (passwordTooShort) return toast.error("Password must be at least 8 characters.")
-    if (usernameTaken) return toast.error("Username is already taken.")
     setLoading(true)
-    const supabase = getAuthClient()
-    const { data, error: signupError } = await supabase.auth.signUp({
-      email,
-      password,
-      options: { emailRedirectTo: `${getURL()}auth/callback` },
-    })
-    console.log("SUPABASE RESPONSE:", data, signupError)
-    if (signupError) {
-      const lowered = signupError.message.toLowerCase()
-      const shouldTrySignInFallback =
-        lowered.includes("already registered") ||
-        lowered.includes("already exists") ||
-        lowered.includes("rate limit") ||
-        lowered.includes("email not confirmed")
-
-      if (shouldTrySignInFallback) {
-        const { data: fallbackData, error: fallbackError } = await supabase.auth.signInWithPassword({ email, password })
-        console.log("SUPABASE RESPONSE:", fallbackData, fallbackError)
-        if (!fallbackError) {
-          setLoading(false)
-          setRedirecting(true)
-          toast.success("Account already exists. Signed you in.")
-          await supabase.auth.getSession()
-          clearClientSessionData()
-          window.location.href = "/market-intelligence"
-          return
-        }
-      }
-
-      setLoading(false)
-      return toast.error(signupError.message ?? "Signup failed.")
-    }
-    const userId = data.user?.id
-    if (userId) {
-      await supabase.from("profiles").upsert({
-        id: userId,
-        email,
+    try {
+      await signUp.create({
+        emailAddress: email.trim(),
+        password,
         username: username.trim(),
-        full_name: fullName.trim() || null,
-        birth_date: birthDate,
+        unsafeMetadata: {
+          fullName: fullName.trim() || null,
+          birthDate: birthDate || null,
+        },
       })
-    }
-    // Confirmation-required flow: user is created, but session is not available until email verification.
-    if (!data.session) {
+      await signUp.prepareEmailAddressVerification({ strategy: "email_code" })
+      setPendingVerification(true)
+      toast.success("Verification code sent to your email.")
+    } catch (error) {
+      const clerkMessage = (error as { errors?: { message?: string }[] } | undefined)?.errors?.[0]?.message
       setLoading(false)
-      return toast.success("Account created. Please check your email to confirm your account before logging in.")
+      toast.error(clerkMessage ?? "Signup failed.")
+      return
     }
     setLoading(false)
-    setRedirecting(true)
-    toast.success("Account created successfully.")
-    await supabase.auth.getSession()
-    clearClientSessionData()
-    window.location.href = "/market-intelligence"
   }
 
-  const onMagicLink = async () => {
-    if (!email) return toast.error("Enter email for magic link.")
-    if (!username.trim()) return toast.error("Username is required.")
-    if (!birthDate) return toast.error("Date of birth is required.")
-    if (usernameTaken) return toast.error("Username is already taken.")
+  const onVerifyCode = async () => {
+    if (!isLoaded || !signUp) return
+    if (!verificationCode.trim()) return toast.error("Enter verification code.")
     setLoading(true)
-    const supabase = getAuthClient()
-    const { error } = await supabase.auth.signInWithOtp({ email, options: { emailRedirectTo: `${getURL()}auth/callback` } })
-    if (!error) {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser()
-      if (user?.id) {
-        await supabase.from("profiles").upsert({
-          id: user.id,
-          email,
-          username: username.trim(),
-          full_name: fullName.trim() || null,
-          birth_date: birthDate,
-        })
+    try {
+      const attempt = await signUp.attemptEmailAddressVerification({ code: verificationCode.trim() })
+      if (attempt.status !== "complete") {
+        setLoading(false)
+        toast.error("Verification is not complete yet.")
+        return
       }
+      if (attempt.createdSessionId) {
+        await setActive?.({ session: attempt.createdSessionId })
+      }
+      const createdUserId = attempt.createdUserId ?? signUp.createdUserId
+      if (createdUserId) {
+        await syncProfileToSupabase(createdUserId)
+      }
+      setRedirecting(true)
+      clearClientSessionData()
+      window.location.href = "/market-intelligence"
+    } catch (error) {
+      const clerkMessage = (error as { errors?: { message?: string }[] } | undefined)?.errors?.[0]?.message
+      toast.error(clerkMessage ?? "Verification failed.")
+    } finally {
+      setLoading(false)
     }
-    setLoading(false)
-    if (error) return toast.error(error.message)
-    toast.success("Magic link sent.")
   }
 
   return (
@@ -136,15 +110,7 @@ export default function SignupPage() {
           <h1 className="text-2xl font-bold text-foreground">Create Account</h1>
           <p className="text-sm text-muted-foreground mt-1">Start with 1000 AI credits and unlock the war room.</p>
         </div>
-        <div className="glass-panel rounded-xl p-1 grid grid-cols-2 gap-1">
-          <button type="button" onClick={() => setMode("email")} className={`rounded-lg text-xs py-2 transition-colors ${mode === "email" ? "bg-primary text-white" : "text-muted-foreground"}`}>
-            Email + Password
-          </button>
-          <button type="button" onClick={() => setMode("magic")} className={`rounded-lg text-xs py-2 transition-colors ${mode === "magic" ? "bg-primary text-white" : "text-muted-foreground"}`}>
-            Magic Link
-          </button>
-        </div>
-        <motion.div animate={focused === "username" || usernameTaken ? { boxShadow: usernameTaken ? "0 0 0 1px rgba(248,113,113,0.7), 0 0 18px rgba(248,113,113,0.2)" : "0 0 0 1px rgba(139,92,246,0.6), 0 0 18px rgba(139,92,246,0.25)" } : { boxShadow: "none" }} className="rounded-xl">
+        <motion.div animate={focused === "username" ? { boxShadow: "0 0 0 1px rgba(139,92,246,0.6), 0 0 18px rgba(139,92,246,0.25)" } : { boxShadow: "none" }} className="rounded-xl">
           <input value={username} onChange={(e) => setUsername(e.target.value)} onFocus={() => setFocused("username")} onBlur={() => setFocused(null)} type="text" placeholder="Username (required)" className="w-full h-11 rounded-xl bg-black/30 border border-primary/20 px-3 text-sm text-foreground" />
         </motion.div>
         <input value={fullName} onChange={(e) => setFullName(e.target.value)} type="text" placeholder="Full name (optional)" className="w-full h-11 rounded-xl bg-black/30 border border-primary/20 px-3 text-sm text-foreground" />
@@ -158,7 +124,7 @@ export default function SignupPage() {
           </div>
         </motion.div>
         <AnimatePresence mode="wait">
-          {mode === "email" ? (
+          {!pendingVerification ? (
             <motion.div key="email-signup" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} className="space-y-4">
               <motion.div animate={focused === "password" || passwordTooShort ? { boxShadow: passwordTooShort ? "0 0 0 1px rgba(248,113,113,0.7), 0 0 18px rgba(248,113,113,0.2)" : "0 0 0 1px rgba(139,92,246,0.6), 0 0 18px rgba(139,92,246,0.25)" } : { boxShadow: "none" }} className="rounded-xl">
                 <div className="relative">
@@ -174,10 +140,17 @@ export default function SignupPage() {
               </button>
             </motion.div>
           ) : (
-            <motion.div key="magic-signup" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }}>
-              <button type="button" onClick={onMagicLink} disabled={loading} className="w-full h-11 rounded-xl border border-primary/30 text-primary font-medium disabled:opacity-70 inline-flex items-center justify-center gap-2">
-                {loading && <Loader2 className="w-4 h-4 animate-spin" />}
-                {loading ? "Sending link..." : "Sign Up with Magic Link"}
+            <motion.div key="code-verify" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} className="space-y-4">
+              <input
+                value={verificationCode}
+                onChange={(e) => setVerificationCode(e.target.value)}
+                type="text"
+                placeholder="Email verification code"
+                className="w-full h-11 rounded-xl bg-black/30 border border-primary/20 px-3 text-sm text-foreground"
+              />
+              <button type="button" onClick={onVerifyCode} disabled={loading || redirecting} className="w-full h-11 rounded-xl border border-primary/30 text-primary font-medium disabled:opacity-70 inline-flex items-center justify-center gap-2">
+                {(loading || redirecting) && <Loader2 className="w-4 h-4 animate-spin" />}
+                {redirecting ? "Redirecting..." : loading ? "Verifying..." : "Verify Email"}
               </button>
             </motion.div>
           )}

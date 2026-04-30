@@ -1,31 +1,16 @@
 "use client"
 
 import { motion } from "framer-motion"
-import { useEffect, useState } from "react"
-import { useRouter } from "next/navigation"
+import { useState } from "react"
 import { Sidebar } from "@/components/dashboard/sidebar"
 import { Header } from "@/components/dashboard/header"
 import { StatCards } from "@/components/dashboard/stat-cards"
 import { ProductGrid } from "@/components/dashboard/product-grid"
 import { ActivitySidebar } from "@/components/dashboard/activity-sidebar"
 import { Filter, SlidersHorizontal } from "lucide-react"
-import { getAuthClient } from "@/lib/supabase/auth-client"
 
 export default function Dashboard() {
-  const router = useRouter()
   const [searchQuery, setSearchQuery] = useState("")
-
-  useEffect(() => {
-    const routeMobileGuest = async () => {
-      if (window.innerWidth >= 768) return
-      const supabase = getAuthClient()
-      const { data } = await supabase.auth.getSession()
-      if (!data.session) {
-        router.replace("/home")
-      }
-    }
-    void routeMobileGuest()
-  }, [router])
 
   return (
     <div className="relative min-h-screen bg-background overflow-hidden">
@@ -96,7 +81,7 @@ export default function Dashboard() {
       </main>
 
       {/* Background Gradient Effects */}
-      <div className="fixed inset-0 pointer-events-none -z-0">
+      <div className="fixed inset-0 pointer-events-none -z-0 max-md:hidden">
         <motion.div
           className="absolute -top-28 left-1/4 w-[30rem] h-[30rem] rounded-full blur-[130px] bg-violet-500/20"
           animate={{ x: [0, 40, -20, 0], y: [0, -20, 25, 0] }}

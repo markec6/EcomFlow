@@ -1,7 +1,8 @@
 "use client"
 
 import { useEffect, useRef, useState } from "react"
-import { getAuthClient } from "@/lib/supabase/auth-client"
+import { useAuth, useUser } from "@clerk/nextjs"
+import { getSupabaseClient } from "@/lib/supabase/client"
 
 const CREDIT_EVENT = "ecomflow-credits-sync"
 const PROFILE_EVENT = "ecomflow-profile-sync"
@@ -16,19 +17,16 @@ type ProfileSummary = {
 }
 
 export function clearClientSessionData() {
-  window.localStorage.clear()
-  window.sessionStorage.clear()
-  // Clear non-HttpOnly cookies available on the client.
-  document.cookie.split(";").forEach((cookie) => {
-    const key = cookie.split("=")[0]?.trim()
-    if (!key) return
-    document.cookie = `${key}=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/`
-  })
+  window.localStorage.removeItem(GUEST_CREDIT_KEY)
+  window.localStorage.removeItem("ecomflow_active_product_id")
+  window.sessionStorage.removeItem(GUEST_CREDIT_KEY)
   window.dispatchEvent(new Event(CREDIT_EVENT))
   window.dispatchEvent(new Event(PROFILE_EVENT))
 }
 
 export function useAiCredits() {
+  const { isSignedIn, userId: clerkUserId } = useAuth()
+  const { user } = useUser()
   const [credits, setCredits] = useState(GUEST_DEFAULT_CREDITS)
   const [isReady, setIsReady] = useState(false)
   const [isGuest, setIsGuest] = useState(true)
@@ -36,6 +34,8 @@ export function useAiCredits() {
   const [userEmail, setUserEmail] = useState<string | null>(null)
   const [profile, setProfile] = useState<ProfileSummary>({ fullName: null, username: null, avatarUrl: null })
   const creditsRef = useRef(GUEST_DEFAULT_CREDITS)
+  const guestCreditsRef = useRef(GUEST_DEFAULT_CREDITS)
+  const guestCreditsInitialized = useRef(false)
 
   const commitCredits = (next: number) => {
     creditsRef.current = next
@@ -43,20 +43,23 @@ export function useAiCredits() {
   }
 
   const getGuestCredits = () => {
-    const raw = window.localStorage.getItem(GUEST_CREDIT_KEY)
-    if (!raw) {
-      window.localStorage.setItem(GUEST_CREDIT_KEY, String(GUEST_DEFAULT_CREDITS))
-      return GUEST_DEFAULT_CREDITS
+    if (!guestCreditsInitialized.current) {
+      const raw = window.localStorage.getItem(GUEST_CREDIT_KEY)
+      if (!raw) {
+        window.localStorage.setItem(GUEST_CREDIT_KEY, String(GUEST_DEFAULT_CREDITS))
+        guestCreditsRef.current = GUEST_DEFAULT_CREDITS
+      } else {
+        const parsed = Number(raw)
+        guestCreditsRef.current = Number.isFinite(parsed) ? Math.max(0, Math.min(GUEST_DEFAULT_CREDITS, parsed)) : GUEST_DEFAULT_CREDITS
+      }
+      guestCreditsInitialized.current = true
     }
-    const parsed = Number(raw)
-    return Number.isFinite(parsed) ? Math.max(0, Math.min(GUEST_DEFAULT_CREDITS, parsed)) : GUEST_DEFAULT_CREDITS
+    return guestCreditsRef.current
   }
 
   const syncCreditsFromSession = async () => {
-    const supabase = getAuthClient()
-    const { data } = await supabase.auth.getSession()
-    const session = data.session
-    if (!session?.user?.id) {
+    const client = getSupabaseClient()
+    if (!isSignedIn || !clerkUserId) {
       setIsGuest(true)
       setUserId(null)
       setUserEmail(null)
@@ -66,13 +69,23 @@ export function useAiCredits() {
       return
     }
 
+    if (!client) {
+      setIsGuest(false)
+      setUserId(clerkUserId)
+      setUserEmail(user?.primaryEmailAddress?.emailAddress ?? null)
+      commitCredits(0)
+      setProfile({ fullName: user?.fullName ?? null, username: user?.username ?? null, avatarUrl: user?.imageUrl ?? null })
+      setIsReady(true)
+      return
+    }
+
     setIsGuest(false)
-    setUserId(session.user.id)
-    setUserEmail(session.user.email ?? null)
-    const { data: profileData } = await supabase
+    setUserId(clerkUserId)
+    setUserEmail(user?.primaryEmailAddress?.emailAddress ?? null)
+    const { data: profileData } = await client
       .from("profiles")
       .select("ai_credits_remaining,full_name,username,avatar_url")
-      .eq("id", session.user.id)
+      .eq("id", clerkUserId)
       .single()
 
     const nextCredits = Number(profileData?.ai_credits_remaining ?? 0)
@@ -87,32 +100,31 @@ export function useAiCredits() {
   }
 
   useEffect(() => {
-    const supabase = getAuthClient()
     void syncCreditsFromSession()
-    const { data: listener } = supabase.auth.onAuthStateChange(() => {
-      void syncCreditsFromSession()
-    })
     const syncListener = () => {
       void syncCreditsFromSession()
     }
-    window.addEventListener(CREDIT_EVENT, syncListener)
-    window.addEventListener(PROFILE_EVENT, syncListener)
+    window.addEventListener(CREDIT_EVENT, syncListener, { passive: true })
+    window.addEventListener(PROFILE_EVENT, syncListener, { passive: true })
     return () => {
-      listener.subscription.unsubscribe()
       window.removeEventListener(CREDIT_EVENT, syncListener)
       window.removeEventListener(PROFILE_EVENT, syncListener)
     }
-  }, [])
+  }, [isSignedIn, clerkUserId, user?.primaryEmailAddress?.emailAddress, user?.fullName, user?.username, user?.imageUrl])
 
   const updateCredits = async (next: number | ((current: number) => number)) => {
     const nextValue = typeof next === "function" ? next(creditsRef.current) : next
     const normalized = Math.max(0, Math.min(MAX_CREDITS, Math.round(nextValue)))
     commitCredits(normalized)
     if (isGuest || !userId) {
-      window.localStorage.setItem(GUEST_CREDIT_KEY, String(Math.min(GUEST_DEFAULT_CREDITS, normalized)))
+      const nextGuestCredits = Math.min(GUEST_DEFAULT_CREDITS, normalized)
+      guestCreditsRef.current = nextGuestCredits
+      window.localStorage.setItem(GUEST_CREDIT_KEY, String(nextGuestCredits))
     } else {
-      const supabase = getAuthClient()
-      await supabase.from("profiles").update({ ai_credits_remaining: normalized }).eq("id", userId)
+      const client = getSupabaseClient()
+      if (client) {
+        await client.from("profiles").update({ ai_credits_remaining: normalized }).eq("id", userId)
+      }
     }
     window.dispatchEvent(new Event(CREDIT_EVENT))
   }

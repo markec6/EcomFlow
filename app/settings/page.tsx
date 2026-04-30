@@ -7,10 +7,10 @@ import { useRouter } from "next/navigation"
 import { Sidebar } from "@/components/dashboard/sidebar"
 import { Header } from "@/components/dashboard/header"
 import { Switch } from "@/components/ui/switch"
-import { getAuthClient } from "@/lib/supabase/auth-client"
+import { useAuth, useSignIn, useUser } from "@clerk/nextjs"
 import { toast } from "sonner"
 import { useAiCredits } from "@/hooks/use-ai-credits"
-import { getURL } from "@/lib/site-url"
+import { getSupabaseClient } from "@/lib/supabase/client"
 
 const PROFILE_EVENT = "ecomflow-profile-sync"
 
@@ -45,6 +45,9 @@ function SettingsCard({
 
 export default function SettingsPage() {
   const router = useRouter()
+  const { userId, isSignedIn } = useAuth()
+  const { user } = useUser()
+  const { signIn } = useSignIn()
   const [searchQuery, setSearchQuery] = useState("")
   const [uploading, setUploading] = useState(false)
   const [savingInfo, setSavingInfo] = useState(false)
@@ -68,19 +71,17 @@ export default function SettingsPage() {
 
   useEffect(() => {
     const loadSettings = async () => {
-      const supabase = getAuthClient()
-      const { data: userData } = await supabase.auth.getUser()
-      const user = userData.user
-      if (!user?.id) {
+      const supabase = getSupabaseClient()
+      if (!supabase || !isSignedIn || !userId) {
         setLoadingSettings(false)
         return
       }
-      setUserEmail(user.email ?? null)
+      setUserEmail(user?.primaryEmailAddress?.emailAddress ?? null)
 
       const { data } = await supabase
         .from("profiles")
         .select("full_name,public_bio,avatar_url,dark_mode,email_alerts,public_profile")
-        .eq("id", user.id)
+        .eq("id", userId)
         .single()
 
       const settings = data as ProfileSettings | null
@@ -94,7 +95,7 @@ export default function SettingsPage() {
     }
 
     void loadSettings()
-  }, [])
+  }, [isSignedIn, userId, user?.primaryEmailAddress?.emailAddress])
 
   useEffect(() => {
     // Do not let an empty profile snapshot overwrite a freshly uploaded URL.
@@ -141,15 +142,13 @@ export default function SettingsPage() {
     if (!validateFile(file)) return
 
     setUploading(true)
-    const supabase = getAuthClient()
+    const supabase = getSupabaseClient()
     try {
-      const { data: userData } = await supabase.auth.getUser()
-      if (!userData.user?.id) {
+      if (!supabase || !userId) {
         toast.error("Please log in to update your profile picture.")
         return
       }
 
-      const userId = userData.user.id
       const filePath = `${userId}/${Date.now()}-${file.name}`
       const { data: uploadData, error: uploadError } = await supabase.storage
         .from("avatars")
@@ -198,9 +197,8 @@ export default function SettingsPage() {
   const savePersonalInfo = async (event: FormEvent) => {
     event.preventDefault()
     setSavingInfo(true)
-    const supabase = getAuthClient()
-    const { data: userData } = await supabase.auth.getUser()
-    if (!userData.user?.id) {
+    const supabase = getSupabaseClient()
+    if (!supabase || !userId) {
       setSavingInfo(false)
       toast.error("Please log in to update your profile.")
       return
@@ -210,7 +208,7 @@ export default function SettingsPage() {
     const { error } = await profilesTable
       .upsert(
         {
-          id: userData.user.id,
+          id: userId,
           full_name: fullName.trim() || null,
           public_bio: publicBio.trim() || null,
         },
@@ -232,9 +230,8 @@ export default function SettingsPage() {
     nextPublicProfile = publicProfile
   ) => {
     setSavingPreferences(true)
-    const supabase = getAuthClient()
-    const { data: userData } = await supabase.auth.getUser()
-    if (!userData.user?.id) {
+    const supabase = getSupabaseClient()
+    if (!supabase || !userId) {
       setSavingPreferences(false)
       toast.error("Please log in to update preferences.")
       return
@@ -243,7 +240,7 @@ export default function SettingsPage() {
     const profilesTable = supabase.from("profiles") as any
     const { error } = await profilesTable.upsert(
       {
-        id: userData.user.id,
+        id: userId,
         dark_mode: nextDarkMode,
         email_alerts: nextEmailAlerts,
         public_profile: nextPublicProfile,
@@ -264,16 +261,23 @@ export default function SettingsPage() {
       toast.error("No email address found for this account.")
       return
     }
-    setSendingReset(true)
-    const supabase = getAuthClient()
-    const { error } = await supabase.auth.resetPasswordForEmail(userEmail, {
-      redirectTo: getURL("/login"),
-    })
-    setSendingReset(false)
-    if (error) {
-      toast.error(error.message)
+    if (!signIn) {
+      toast.error("Reset flow is unavailable right now.")
       return
     }
+    setSendingReset(true)
+    try {
+      await signIn.create({
+        strategy: "reset_password_email_code",
+        identifier: userEmail,
+      })
+    } catch (error) {
+      const message = (error as { errors?: { message?: string }[] } | undefined)?.errors?.[0]?.message
+      setSendingReset(false)
+      toast.error(message ?? "Could not send reset email.")
+      return
+    }
+    setSendingReset(false)
     toast.success("Password reset email sent.")
   }
 

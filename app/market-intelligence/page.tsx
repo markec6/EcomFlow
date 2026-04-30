@@ -9,12 +9,12 @@ import { Check, Loader2 } from "lucide-react"
 import { AreaChart, Area, CartesianGrid, ResponsiveContainer, XAxis, YAxis, Tooltip, BarChart, Bar } from "recharts"
 import { fetchProductsFromSupabase } from "@/lib/products-engine"
 import { getSupabaseClient } from "@/lib/supabase/client"
-import { getAuthClient } from "@/lib/supabase/auth-client"
 import { useAiCredits } from "@/hooks/use-ai-credits"
 import { toast } from "sonner"
 import { useRouter } from "next/navigation"
 import { spendCreditForProductScan } from "@/lib/credit-transactions"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { useIsMobile } from "@/hooks/use-mobile"
 
 const productCountryMap: Record<string, string> = {}
 const STATIC_TS = "2026-04-28T12:00:00.000Z"
@@ -23,8 +23,9 @@ const pulseClassByIntensity = (intensity: number | null) => (!intensity || inten
 
 export default function MarketIntelligencePage() {
   const router = useRouter()
+  const isMobile = useIsMobile()
   const [searchQuery, setSearchQuery] = useState("")
-  const { setCredits, decrementCredit } = useAiCredits()
+  const { setCredits, decrementCredit, userId: activeUserId } = useAiCredits()
   const [products, setProducts] = useState<Product[]>([])
   const [savedProducts, setSavedProducts] = useState<SavedProduct[]>([])
   const [selectedCountry, setSelectedCountry] = useState<string | null>(null)
@@ -111,13 +112,10 @@ export default function MarketIntelligencePage() {
       toast.info("This product is already in your vault.")
       return
     }
-    const auth = getAuthClient()
     const client = getSupabaseClient()
-    const { data: userData } = await auth.auth.getUser()
-    if (client && userData.user?.id) {
-      const userId = userData.user.id
+    if (client && activeUserId) {
       const { error } = await client.from("vault").insert({
-        user_id: userId,
+        user_id: activeUserId,
         product_id: product.id,
         name: product.name,
         category: product.category,
@@ -128,9 +126,9 @@ export default function MarketIntelligencePage() {
         toast.info("This product is already in your vault.")
         return
       }
-      await client.from("saved_products").insert({ user_id: userId, product_id: product.id, status: "saved" })
+      await client.from("saved_products").insert({ user_id: activeUserId, product_id: product.id, status: "saved" })
     }
-    setSavedProducts((current) => [...current, { id: crypto.randomUUID(), user_id: userData.user?.id ?? "demo-user", product_id: product.id, status: "saved", created_at: STATIC_TS }])
+    setSavedProducts((current) => [...current, { id: crypto.randomUUID(), user_id: activeUserId ?? "demo-user", product_id: product.id, status: "saved", created_at: STATIC_TS }])
     setRecentlySavedProductId(product.id)
     toast.success("Product secured in your Vault!")
   }
@@ -148,15 +146,13 @@ export default function MarketIntelligencePage() {
       setScanningProducts((current) => ({ ...current, [productId]: false }))
       return
     }
-    const auth = getAuthClient()
     const client = getSupabaseClient()
     if (!client) {
       setScanningProducts((current) => ({ ...current, [productId]: false }))
       return
     }
 
-    const { data: userData } = await auth.auth.getUser()
-    if (!userData.user?.id) {
+    if (!activeUserId) {
       const creditSpent = await decrementCredit()
       if (!creditSpent) {
         setScanningProducts((current) => ({ ...current, [productId]: false }))
@@ -169,7 +165,7 @@ export default function MarketIntelligencePage() {
       return
     }
 
-    const result = await spendCreditForProductScan(client, userData.user.id, productId)
+    const result = await spendCreditForProductScan(client, activeUserId, productId)
     if (!result.ok) {
       if (result.reason === "duplicate") {
         toast.info("Research already started. Please wait a moment.")
@@ -185,8 +181,6 @@ export default function MarketIntelligencePage() {
     await setCredits(result.remainingCredits)
     toast.success("Analyzing product... 1 credit used.")
     setIsRedirecting(true)
-    await auth.auth.getSession()
-    router.refresh()
     window.location.href = `/products/${productId}`
   }
 
@@ -205,7 +199,7 @@ export default function MarketIntelligencePage() {
             <div className="glass-panel rounded-xl border border-primary/20 p-4">
               <div className="flex items-center justify-between mb-4">
                 <h2 className="text-lg font-semibold text-foreground">Global Demand Heatmap</h2>
-                <button onClick={() => setSelectedCountry(null)} className="px-3 py-1.5 rounded-lg border border-primary/30 text-xs text-primary hover:bg-primary hover:text-white transition-colors duration-200">Clear Filter</button>
+                <button onClick={() => setSelectedCountry(null)} className="px-3 py-1.5 min-h-11 rounded-lg border border-primary/30 text-xs text-primary hover:bg-primary hover:text-white transition-colors duration-200 touch-manipulation">Clear Filter</button>
               </div>
               <div className="rounded-xl border border-primary/20 bg-slate-950/45 p-3 mb-4 transform-gpu">
                 <svg viewBox="0 0 320 140" className="w-full h-[120px]">
@@ -223,7 +217,7 @@ export default function MarketIntelligencePage() {
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                 {filteredTrends.map((trend) => (
-                  <motion.div key={trend.id} whileHover={{ scale: 1.02, boxShadow: "0 14px 28px rgba(2, 6, 23, 0.35)" }} transition={{ duration: 0.2 }} onMouseEnter={() => setHoveredCountry(trend.country_code ?? null)} onMouseLeave={() => setHoveredCountry(null)} onClick={() => setSelectedCountry((current) => (current === trend.country_code ? null : trend.country_code ?? null))} className={`rounded-xl border bg-slate-950/50 backdrop-blur-md p-4 cursor-pointer transform-gpu ${selectedCountry === trend.country_code ? "border-primary shadow-[0_0_20px_rgba(139,92,246,0.3)]" : "border-primary/20"}`}>
+                  <motion.div key={trend.id} whileHover={isMobile ? undefined : { scale: 1.02, boxShadow: "0 14px 28px rgba(2, 6, 23, 0.35)" }} transition={{ duration: 0.2 }} onMouseEnter={isMobile ? undefined : () => setHoveredCountry(trend.country_code ?? null)} onMouseLeave={isMobile ? undefined : () => setHoveredCountry(null)} onClick={() => setSelectedCountry((current) => (current === trend.country_code ? null : trend.country_code ?? null))} className={`rounded-xl border bg-slate-950/50 backdrop-blur-md p-4 cursor-pointer transform-gpu touch-manipulation ${selectedCountry === trend.country_code ? "border-primary shadow-[0_0_20px_rgba(139,92,246,0.3)]" : "border-primary/20"}`}>
                     <div className="flex items-center justify-between mb-3">
                       <p className="text-sm font-semibold text-foreground">{trend.country_code}</p>
                       <motion.span className={`w-2.5 h-2.5 rounded-full ${pulseClassByIntensity(trend.intensity_level)}`} animate={{ scale: [1, 1.3, 1], opacity: [0.45, 1, 0.45] }} transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }} />
@@ -281,7 +275,7 @@ export default function MarketIntelligencePage() {
                   const detectedProduct = (item.metadata as { detected_product?: string } | null)?.detected_product ?? "Unknown Product"
                   const spend = (item.metadata as { ad_spend_est?: string } | null)?.ad_spend_est ?? "N/A"
                   return (
-                    <motion.div key={item.id} whileHover={{ scale: 1.02, boxShadow: "0 14px 28px rgba(2, 6, 23, 0.35)" }} transition={{ duration: 0.2 }} className="min-w-[280px] rounded-xl border border-primary/20 bg-slate-950/50 backdrop-blur-md px-4 py-3 transform-gpu">
+                    <motion.div key={item.id} whileHover={isMobile ? undefined : { scale: 1.02, boxShadow: "0 14px 28px rgba(2, 6, 23, 0.35)" }} transition={{ duration: 0.2 }} className="min-w-[280px] rounded-xl border border-primary/20 bg-slate-950/50 backdrop-blur-md px-4 py-3 transform-gpu">
                       <div className="flex items-center gap-2 mb-2">
                         <motion.span className="w-2 h-2 rounded-full bg-rose-400" animate={{ scale: [1, 1.3, 1], opacity: [0.45, 1, 0.45] }} transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }} />
                         <span className="text-[11px] uppercase tracking-wide text-rose-300 font-semibold">Live</span>
@@ -315,14 +309,14 @@ export default function MarketIntelligencePage() {
                         <td className="py-3 pr-3 text-emerald-400">${predictedProfit.toFixed(2)}</td>
                         <td className="py-3 pr-3 text-foreground">{saturationScore}</td>
                         <td className="py-3 pr-3"><div className="flex items-center gap-2">
-                          <motion.button onClick={() => handleSaveToVault(product)} whileTap={{ scale: 0.97 }} className={`relative overflow-hidden px-3 py-1.5 rounded-lg border border-primary/40 transition-colors duration-200 transform-gpu ${isSaved ? "text-foreground/70 border-primary/20 bg-primary/10" : "text-primary hover:bg-primary hover:text-white"}`}>
+                          <motion.button onClick={() => handleSaveToVault(product)} whileTap={{ scale: 0.97 }} className={`relative overflow-hidden px-3 py-1.5 min-h-11 rounded-lg border border-primary/40 transition-colors duration-200 transform-gpu touch-manipulation ${isSaved ? "text-foreground/70 border-primary/20 bg-primary/10" : "text-primary hover:bg-primary hover:text-white"}`}>
                             <span className="relative z-10 inline-flex items-center gap-1.5">{isSaved ? <><Check className="w-3.5 h-3.5 text-emerald-400" />Saved</> : "Save to Vault"}</span>
                             <AnimatePresence>{recentlySavedProductId === product.id && <motion.span initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute inset-0 z-0">{[...Array(8)].map((_, i) => <motion.span key={i} className="absolute left-1/2 top-1/2 w-1 h-1 rounded-full bg-violet-300" initial={{ x: 0, y: 0, opacity: 1, scale: 1 }} animate={{ x: Math.cos((i / 8) * Math.PI * 2) * 18, y: Math.sin((i / 8) * Math.PI * 2) * 12, opacity: 0, scale: 0.2 }} transition={{ duration: 0.45 }} />)}</motion.span>}</AnimatePresence>
                           </motion.button>
                           <button
                             onClick={() => handleDeepResearch(product)}
                             disabled={isResearching}
-                            className="px-3 py-1.5 rounded-lg border border-border text-foreground hover:border-primary/50 disabled:opacity-70 disabled:cursor-not-allowed transition-colors duration-200 inline-flex items-center gap-1.5"
+                            className="px-3 py-1.5 min-h-11 rounded-lg border border-border text-foreground hover:border-primary/50 disabled:opacity-70 disabled:cursor-not-allowed transition-colors duration-200 inline-flex items-center gap-1.5 touch-manipulation"
                           >
                             {isResearching && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
                             {isResearching ? "Processing..." : "Deep Research (-1)"}
@@ -338,7 +332,7 @@ export default function MarketIntelligencePage() {
         </div>
       </main>
       {isRedirecting && (
-        <div className="fixed inset-0 z-[90] bg-black/60 backdrop-blur-sm flex items-center justify-center">
+        <div className="fixed inset-0 z-[90] bg-black/60 max-md:bg-black/75 flex items-center justify-center">
           <div className="rounded-xl border border-primary/30 bg-slate-950/90 px-5 py-3 text-sm text-foreground">
             Processing...
           </div>
@@ -360,7 +354,7 @@ export default function MarketIntelligencePage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-      <div className="fixed inset-0 pointer-events-none -z-0">
+      <div className="fixed inset-0 pointer-events-none -z-0 max-md:hidden">
         <motion.div className="absolute -top-28 left-1/4 w-[30rem] h-[30rem] rounded-full blur-[130px] bg-violet-500/20" animate={{ x: [0, 40, -20, 0], y: [0, -20, 25, 0] }} transition={{ duration: 34, repeat: Infinity, ease: "easeInOut" }} />
         <motion.div className="absolute bottom-[-10rem] right-1/4 w-[32rem] h-[32rem] rounded-full blur-[140px] bg-indigo-500/20" animate={{ x: [0, -35, 18, 0], y: [0, 12, -18, 0] }} transition={{ duration: 38, repeat: Infinity, ease: "easeInOut" }} />
         <motion.div className="absolute top-1/2 left-[45%] w-[24rem] h-[24rem] rounded-full blur-[120px] bg-blue-500/10" animate={{ opacity: [0.3, 0.6, 0.35] }} transition={{ duration: 32, repeat: Infinity, ease: "easeInOut" }} />

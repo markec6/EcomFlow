@@ -1,9 +1,10 @@
 "use client"
 
-import { useEffect, useState, type MouseEvent } from "react"
+import { memo, useEffect, useState, type MouseEvent } from "react"
 import { motion } from "framer-motion"
 import Image from "next/image"
 import { Loader2, Pencil, Star, Store, Trash2 } from "lucide-react"
+import { useIsMobile } from "@/hooks/use-mobile"
 
 interface ProductCardProps {
   product: {
@@ -36,7 +37,7 @@ interface ProductCardProps {
   actionLabel?: string
 }
 
-export function ProductCard({
+export const ProductCard = memo(function ProductCard({
   product,
   index,
   aiCreditsRemaining = 0,
@@ -56,6 +57,7 @@ export function ProductCard({
   isSpendingCredit = false,
   actionLabel,
 }: ProductCardProps) {
+  const isMobile = useIsMobile()
   const [isScanning, setIsScanning] = useState(false)
 
   useEffect(() => {
@@ -92,13 +94,13 @@ export function ProductCard({
 
   return (
     <motion.div
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ delay: index * 0.1, duration: 0.2 }}
-      whileHover={{ scale: 1.02, boxShadow: "0 16px 30px rgba(2, 6, 23, 0.38)" }}
+      initial={isMobile ? false : { opacity: 0, y: 20 }}
+      animate={isMobile ? undefined : { opacity: 1, y: 0 }}
+      transition={isMobile ? undefined : { delay: index * 0.1, duration: 0.2 }}
+      whileHover={isMobile ? undefined : { scale: 1.02, boxShadow: "0 16px 30px rgba(2, 6, 23, 0.38)" }}
       whileTap={{ scale: 0.99 }}
       onClick={mode === "vault" ? onOpenLab : onCardClick}
-      className="relative rounded-xl glass-panel overflow-hidden group will-change-transform cursor-pointer"
+      className="relative rounded-xl glass-panel overflow-hidden group will-change-transform cursor-pointer touch-manipulation"
     >
       {mode === "vault" && (
         <div className="absolute top-3 left-3 z-20 flex items-center gap-2">
@@ -107,7 +109,7 @@ export function ProductCard({
               event.stopPropagation()
               onToggleSelect?.()
             }}
-            className={`w-4 h-4 rounded border transition-colors ${
+            className={`w-11 h-11 rounded border transition-colors flex items-center justify-center touch-manipulation ${
               selected ? "bg-primary border-primary" : "border-white/40 bg-black/30"
             }`}
             aria-label="Select product"
@@ -134,7 +136,7 @@ export function ProductCard({
               event.stopPropagation()
               onTogglePriority?.()
             }}
-            className={`w-8 h-8 rounded-lg border border-primary/30 flex items-center justify-center backdrop-blur-md bg-slate-950/55 transition-colors ${
+            className={`w-11 h-11 rounded-lg border border-primary/30 flex items-center justify-center backdrop-blur-md bg-slate-950/55 transition-colors touch-manipulation ${
               priority
                 ? "text-amber-300"
                 : "text-muted-foreground hover:text-amber-300"
@@ -159,7 +161,7 @@ export function ProductCard({
               event.stopPropagation()
               onSaveToVault?.()
             }}
-            className="w-8 h-8 rounded-lg border border-primary/30 flex items-center justify-center backdrop-blur-md bg-slate-950/55 text-muted-foreground hover:text-amber-300 transition-colors"
+            className="w-11 h-11 rounded-lg border border-primary/30 flex items-center justify-center backdrop-blur-md bg-slate-950/55 text-muted-foreground hover:text-amber-300 transition-colors touch-manipulation"
             aria-label="Save to vault"
           >
             <Star className="w-4 h-4" />
@@ -173,6 +175,7 @@ export function ProductCard({
           src={product.image}
           alt={product.title}
           fill
+          loading="lazy"
           className="object-cover"
         />
         <div className="absolute inset-0 bg-gradient-to-t from-card via-transparent to-transparent" />
@@ -183,13 +186,13 @@ export function ProductCard({
               onClick={(event) => event.stopPropagation()}
               className="glass-panel rounded-xl px-2 py-1 flex items-center gap-1"
             >
-              <button onClick={onShopifyExport} className="p-1.5 rounded-lg hover:bg-white/10">
+              <button onClick={onShopifyExport} className="w-11 h-11 rounded-lg hover:bg-white/10 inline-flex items-center justify-center touch-manipulation">
                 <Store className="w-4 h-4 text-primary" />
               </button>
-              <button onClick={onEditCopy} className="p-1.5 rounded-lg hover:bg-white/10">
+              <button onClick={onEditCopy} className="w-11 h-11 rounded-lg hover:bg-white/10 inline-flex items-center justify-center touch-manipulation">
                 <Pencil className="w-4 h-4 text-primary" />
               </button>
-              <button onClick={onDelete} className="p-1.5 rounded-lg hover:bg-white/10">
+              <button onClick={onDelete} className="w-11 h-11 rounded-lg hover:bg-white/10 inline-flex items-center justify-center touch-manipulation">
                 <Trash2 className="w-4 h-4 text-rose-300" />
               </button>
             </div>
@@ -234,12 +237,12 @@ export function ProductCard({
 
         {mode === "default" && (
           <motion.button
-            whileHover={{ scale: 1.02, y: -1 }}
+            whileHover={isMobile ? undefined : { scale: 1.02, y: -1 }}
             whileTap={{ scale: 0.97 }}
             transition={{ duration: 0.2 }}
             onClick={handleDeepAnalysisClick}
             disabled={isScanning || isSpendingCredit}
-            className="w-full py-2.5 rounded-xl border border-primary/60 text-primary font-medium text-sm hover:bg-primary hover:text-white disabled:opacity-70 disabled:cursor-not-allowed transition-colors duration-200 inline-flex items-center justify-center gap-1.5"
+            className="w-full min-h-11 py-2.5 rounded-xl border border-primary/60 text-primary font-medium text-sm hover:bg-primary hover:text-white disabled:opacity-70 disabled:cursor-not-allowed transition-colors duration-200 inline-flex items-center justify-center gap-1.5 touch-manipulation"
           >
             {(isScanning || isSpendingCredit) && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
             {isScanning || isSpendingCredit ? "Processing..." : actionLabel ?? `Deep Analysis (${aiCreditsRemaining})`}
@@ -248,4 +251,4 @@ export function ProductCard({
       </div>
     </motion.div>
   )
-}
+})
