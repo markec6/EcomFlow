@@ -33,6 +33,7 @@ interface ProductCardProps {
   onCardClick?: () => void
   onSaveToVault?: () => void
   isSpendingCredit?: boolean
+  actionLabel?: string
 }
 
 export function ProductCard({
@@ -53,6 +54,7 @@ export function ProductCard({
   onCardClick,
   onSaveToVault,
   isSpendingCredit = false,
+  actionLabel,
 }: ProductCardProps) {
   const [isScanning, setIsScanning] = useState(false)
 
@@ -240,7 +242,7 @@ export function ProductCard({
             className="w-full py-2.5 rounded-xl border border-primary/60 text-primary font-medium text-sm hover:bg-primary hover:text-white disabled:opacity-70 disabled:cursor-not-allowed transition-colors duration-200 inline-flex items-center justify-center gap-1.5"
           >
             {(isScanning || isSpendingCredit) && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
-            {isScanning || isSpendingCredit ? "Processing..." : `Deep Analysis (${aiCreditsRemaining})`}
+            {isScanning || isSpendingCredit ? "Processing..." : actionLabel ?? `Deep Analysis (${aiCreditsRemaining})`}
           </motion.button>
         )}
       </div>

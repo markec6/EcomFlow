@@ -3,11 +3,12 @@
 import { useEffect, useRef, useState } from "react"
 import { getAuthClient } from "@/lib/supabase/auth-client"
 
-const GUEST_CREDIT_KEY = "guest_credits"
 const CREDIT_EVENT = "ecomflow-credits-sync"
 const PROFILE_EVENT = "ecomflow-profile-sync"
 const MAX_CREDITS = 1000
 const GUEST_DEFAULT_CREDITS = 3
+
+let guestCredits = GUEST_DEFAULT_CREDITS
 
 type ProfileSummary = {
   fullName: string | null
@@ -42,16 +43,6 @@ export function useAiCredits() {
     setCredits(next)
   }
 
-  const getGuestCredits = () => {
-    const raw = window.sessionStorage.getItem(GUEST_CREDIT_KEY)
-    if (!raw) {
-      window.sessionStorage.setItem(GUEST_CREDIT_KEY, String(GUEST_DEFAULT_CREDITS))
-      return GUEST_DEFAULT_CREDITS
-    }
-    const parsed = Number(raw)
-    return Number.isFinite(parsed) ? Math.max(0, parsed) : GUEST_DEFAULT_CREDITS
-  }
-
   const syncCreditsFromSession = async () => {
     const supabase = getAuthClient()
     const { data } = await supabase.auth.getSession()
@@ -61,7 +52,7 @@ export function useAiCredits() {
       setUserId(null)
       setUserEmail(null)
       setProfile({ fullName: null, username: null, avatarUrl: null })
-      commitCredits(getGuestCredits())
+      commitCredits(guestCredits)
       setIsReady(true)
       return
     }
@@ -76,11 +67,7 @@ export function useAiCredits() {
       .single()
 
     const nextCredits = Number(profileData?.ai_credits_remaining ?? 0)
-    let normalizedCredits = Number.isFinite(nextCredits) ? nextCredits : 0
-    if ((session.user.email ?? "").toLowerCase() === "marjanovica773@gmail.com" && normalizedCredits !== 420) {
-      normalizedCredits = 420
-      await supabase.from("profiles").update({ ai_credits_remaining: 420 }).eq("id", session.user.id)
-    }
+    const normalizedCredits = Number.isFinite(nextCredits) ? nextCredits : 0
     commitCredits(normalizedCredits)
     setProfile({
       fullName: (profileData?.full_name as string | null | undefined) ?? null,
@@ -113,7 +100,7 @@ export function useAiCredits() {
     const normalized = Math.max(0, Math.min(MAX_CREDITS, Math.round(nextValue)))
     commitCredits(normalized)
     if (isGuest || !userId) {
-      window.sessionStorage.setItem(GUEST_CREDIT_KEY, String(normalized))
+      guestCredits = normalized
     } else {
       const supabase = getAuthClient()
       await supabase.from("profiles").update({ ai_credits_remaining: normalized }).eq("id", userId)

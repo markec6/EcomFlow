@@ -163,12 +163,17 @@ export function Header({ searchQuery, onSearchChange }: HeaderProps) {
             <span className="text-xs text-primary font-semibold">{credits}/1000 Credits Left</span>
             {userEmail && <span className="text-[11px] text-muted-foreground">• {userEmail}</span>}
           </div>
+        ) : isGuest && credits > 0 ? (
+          <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl glass-panel border border-primary/25">
+            <Zap className="w-3.5 h-3.5 text-primary" />
+            <span className="text-xs text-primary font-semibold">{credits}/3 Guest Credits</span>
+          </div>
         ) : (
           <button
-            onClick={() => router.push("/signup")}
+            onClick={() => router.push("/sign-up")}
             className="px-3 py-1.5 rounded-xl bg-gradient-to-r from-violet-600 to-purple-500 text-white text-xs font-semibold hover:opacity-95"
           >
-            Sign up to claim 300 Credits
+            Sign up for 300 credits
           </button>
         )}
 
@@ -258,12 +263,20 @@ export function Header({ searchQuery, onSearchChange }: HeaderProps) {
                   </span>
                   <span className="text-xs text-foreground font-semibold">{credits}/1000</span>
                 </div>
+              ) : isGuest && credits > 0 ? (
+                <div className="flex items-center justify-between rounded-xl border border-primary/20 px-3 py-2">
+                  <span className="inline-flex items-center gap-1.5 text-xs text-primary font-semibold">
+                    <Zap className="w-3.5 h-3.5" />
+                    Guest Credits
+                  </span>
+                  <span className="text-xs text-foreground font-semibold">{credits}/3</span>
+                </div>
               ) : (
                 <button
-                  onClick={() => router.push("/signup")}
+                  onClick={() => router.push("/sign-up")}
                   className="w-full rounded-xl bg-gradient-to-r from-violet-600 to-purple-500 px-3 py-2 text-sm font-semibold text-white"
                 >
-                  Log in to get 300 credits
+                  Sign up for 300 credits
                 </button>
               )}
 

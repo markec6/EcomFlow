@@ -53,7 +53,7 @@ export function ProductGrid({ searchQuery }: ProductGridProps) {
     const creditSpent = await decrementCredit()
     if (!creditSpent) {
       if (isGuest) {
-        setShowGuestLock(true)
+        router.push("/sign-up")
         return
       }
       setShowBuyMore(true)
@@ -61,6 +61,13 @@ export function ProductGrid({ searchQuery }: ProductGridProps) {
     }
     setSpendingProductId(productId)
     toast.loading("Spending 1 Credit...", { id: `credits-${productId}` })
+    if (isGuest) {
+      window.setTimeout(() => {
+        toast.success(`Guest scan used for ${productTitle}`, { id: `credits-${productId}` })
+        setSpendingProductId(null)
+      }, 500)
+      return
+    }
     await new Promise<void>((resolve) => {
       window.setTimeout(() => {
         resolve()
@@ -109,6 +116,7 @@ export function ProductGrid({ searchQuery }: ProductGridProps) {
           onCardClick={() => setActiveProductId(String(product.id))}
           onSaveToVault={() => handleSaveToVault(String(product.id))}
           isSpendingCredit={spendingProductId === String(product.id)}
+          actionLabel={isGuest ? "Proceed (1 Credit)" : undefined}
         />
       ))}
       <Dialog open={showBuyMore} onOpenChange={setShowBuyMore}>
@@ -134,7 +142,7 @@ export function ProductGrid({ searchQuery }: ProductGridProps) {
           </DialogHeader>
           <DialogFooter>
             <button
-              onClick={() => router.push("/signup")}
+              onClick={() => router.push("/sign-up")}
               className="px-4 py-2 rounded-lg bg-gradient-to-r from-violet-600 to-purple-500 text-white"
             >
               Sign up to claim 300 Credits
