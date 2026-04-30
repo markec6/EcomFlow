@@ -1,0 +1,239 @@
+@import 'tailwindcss';
+@import 'tw-animate-css';
+
+@custom-variant dark (&:is(.dark *));
+
+:root {
+  --background: #06070d;
+  --foreground: #FAFAFA;
+  --card: #101126;
+  --card-foreground: #FAFAFA;
+  --popover: #121214;
+  --popover-foreground: #FAFAFA;
+  --primary: #8B5CF6;
+  --primary-foreground: #FAFAFA;
+  --secondary: #17192f;
+  --secondary-foreground: #FAFAFA;
+  --muted: #20233b;
+  --muted-foreground: #A1A1AA;
+  --accent: #8B5CF6;
+  --accent-foreground: #FAFAFA;
+  --destructive: #EF4444;
+  --destructive-foreground: #FAFAFA;
+  --border: #2b2e48;
+  --input: #2b2e48;
+  --ring: #8B5CF6;
+  --chart-1: #8B5CF6;
+  --chart-2: #22C55E;
+  --chart-3: #F97316;
+  --chart-4: #06B6D4;
+  --chart-5: #EC4899;
+  --radius: 0.75rem;
+  --sidebar: #090b18;
+  --sidebar-foreground: #FAFAFA;
+  --sidebar-primary: #8B5CF6;
+  --sidebar-primary-foreground: #FAFAFA;
+  --sidebar-accent: #1C1C1F;
+  --sidebar-accent-foreground: #FAFAFA;
+  --sidebar-border: #27272A;
+  --sidebar-ring: #8B5CF6;
+}
+
+.dark {
+  --background: #06070d;
+  --foreground: #FAFAFA;
+  --card: #101126;
+  --card-foreground: #FAFAFA;
+  --popover: #121214;
+  --popover-foreground: #FAFAFA;
+  --primary: #8B5CF6;
+  --primary-foreground: #FAFAFA;
+  --secondary: #17192f;
+  --secondary-foreground: #FAFAFA;
+  --muted: #20233b;
+  --muted-foreground: #A1A1AA;
+  --accent: #8B5CF6;
+  --accent-foreground: #FAFAFA;
+  --destructive: #EF4444;
+  --destructive-foreground: #FAFAFA;
+  --border: #2b2e48;
+  --input: #2b2e48;
+  --ring: #8B5CF6;
+  --chart-1: #8B5CF6;
+  --chart-2: #22C55E;
+  --chart-3: #F97316;
+  --chart-4: #06B6D4;
+  --chart-5: #EC4899;
+  --sidebar: #090b18;
+  --sidebar-foreground: #FAFAFA;
+  --sidebar-primary: #8B5CF6;
+  --sidebar-primary-foreground: #FAFAFA;
+  --sidebar-accent: #1C1C1F;
+  --sidebar-accent-foreground: #FAFAFA;
+  --sidebar-border: #27272A;
+  --sidebar-ring: #8B5CF6;
+}
+
+@theme inline {
+  --font-sans: 'Inter', 'Geist', sans-serif;
+  --font-mono: 'Geist Mono', monospace;
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+    background-image:
+      radial-gradient(circle at 20% 20%, rgba(99, 102, 241, 0.14), transparent 35%),
+      radial-gradient(circle at 80% 15%, rgba(139, 92, 246, 0.1), transparent 28%),
+      radial-gradient(circle at 50% 85%, rgba(59, 130, 246, 0.08), transparent 30%);
+    background-size: 140% 140%;
+    animation: background-drift 36s ease-in-out infinite alternate;
+  }
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: #09090B;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #27272A;
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #3F3F46;
+}
+
+/* Glow effects */
+.glow-violet {
+  box-shadow: 0 0 28px rgba(139, 92, 246, 0.3), 0 0 60px rgba(99, 102, 241, 0.16);
+}
+
+.glow-green {
+  box-shadow: 0 0 20px rgba(34, 197, 94, 0.3), 0 0 40px rgba(34, 197, 94, 0.1);
+}
+
+.glow-orange {
+  box-shadow: 0 0 15px rgba(249, 115, 22, 0.4);
+}
+
+/* Pulse animation for notifications */
+@keyframes pulse-ring {
+  0% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1.5);
+    opacity: 0;
+  }
+}
+
+.pulse-ring::before {
+  content: '';
+  position: absolute;
+  inset: -2px;
+  border-radius: 50%;
+  border: 2px solid #EF4444;
+  animation: pulse-ring 1.5s ease-out infinite;
+}
+
+/* Shimmer effect */
+@keyframes shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+.shimmer {
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(139, 92, 246, 0.1) 50%,
+    transparent 100%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 2s infinite;
+}
+
+/* Glass effect */
+.glass {
+  background: linear-gradient(145deg, rgba(19, 21, 43, 0.7), rgba(10, 11, 24, 0.58));
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border: 1px solid rgba(99, 102, 241, 0.18);
+}
+
+.glass-panel {
+  background: linear-gradient(150deg, rgba(19, 21, 43, 0.74), rgba(9, 10, 23, 0.62));
+  border: 1px solid rgba(99, 102, 241, 0.16);
+  box-shadow: 0 12px 36px rgba(2, 6, 23, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+}
+
+.soft-hover {
+  transition: transform 200ms ease-out, box-shadow 200ms ease-out;
+}
+
+.soft-hover:hover {
+  transform: scale(1.02);
+  box-shadow: 0 14px 28px rgba(2, 6, 23, 0.36);
+}
+
+@keyframes background-drift {
+  0% {
+    background-position: 0% 0%;
+  }
+  100% {
+    background-position: 100% 100%;
+  }
+}
