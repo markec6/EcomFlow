@@ -155,7 +155,7 @@ export function Header({ searchQuery, onSearchChange }: HeaderProps) {
             transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
           />
           <span className={`text-xs font-medium ${supabaseConfigured ? "text-emerald-300" : "text-rose-300"}`}>
-            Supabase Connection: {supabaseConfigured ? "Active" : "Missing Env"}
+            Supabase Connection: {supabaseConfigured ? "Active" : "Inactive (Missing Env)"}
           </span>
         </div>
         {!isGuest && credits > 0 ? (
@@ -252,7 +252,7 @@ export function Header({ searchQuery, onSearchChange }: HeaderProps) {
               <div className={`flex items-center justify-between rounded-xl border px-3 py-2 ${supabaseConfigured ? "border-emerald-400/20" : "border-rose-400/20"}`}>
                 <span className="text-xs text-muted-foreground">Supabase Connection</span>
                 <span className={`text-xs font-semibold ${supabaseConfigured ? "text-emerald-300" : "text-rose-300"}`}>
-                  {supabaseConfigured ? "Active" : "Missing Env"}
+                  {supabaseConfigured ? "Active" : "Inactive (Missing Env)"}
                 </span>
               </div>
 
