@@ -24,6 +24,7 @@ interface HeaderProps {
 export function Header({ searchQuery, onSearchChange }: HeaderProps) {
   const router = useRouter()
   const { credits, isGuest, userEmail, profile } = useAiCredits()
+  const supabaseConfigured = Boolean(process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY)
   const sessionValid = !isGuest
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null)
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
@@ -147,14 +148,14 @@ export function Header({ searchQuery, onSearchChange }: HeaderProps) {
         animate={{ x: 0, opacity: 1 }}
         className="hidden lg:flex items-center gap-4"
       >
-        <div className={`flex items-center gap-2 px-3 py-1.5 rounded-xl glass-panel border ${sessionValid ? "border-emerald-400/20" : "border-rose-400/20"}`}>
+        <div className={`flex items-center gap-2 px-3 py-1.5 rounded-xl glass-panel border ${supabaseConfigured ? "border-emerald-400/20" : "border-rose-400/20"}`}>
           <motion.span
-            className={`w-2.5 h-2.5 rounded-full ${sessionValid ? "bg-emerald-400" : "bg-rose-400"}`}
+            className={`w-2.5 h-2.5 rounded-full ${supabaseConfigured ? "bg-emerald-400" : "bg-rose-400"}`}
             animate={{ scale: [1, 1.25, 1], opacity: [0.45, 1, 0.45] }}
             transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
           />
-          <span className={`text-xs font-medium ${sessionValid ? "text-emerald-300" : "text-rose-300"}`}>
-            Live Supabase Connection: {sessionValid ? "Active" : "Inactive"}
+          <span className={`text-xs font-medium ${supabaseConfigured ? "text-emerald-300" : "text-rose-300"}`}>
+            Supabase Connection: {supabaseConfigured ? "Active" : "Missing Env"}
           </span>
         </div>
         {!isGuest && credits > 0 ? (
@@ -248,10 +249,10 @@ export function Header({ searchQuery, onSearchChange }: HeaderProps) {
             </div>
 
             <div className="mt-3 space-y-2">
-              <div className={`flex items-center justify-between rounded-xl border px-3 py-2 ${sessionValid ? "border-emerald-400/20" : "border-rose-400/20"}`}>
+              <div className={`flex items-center justify-between rounded-xl border px-3 py-2 ${supabaseConfigured ? "border-emerald-400/20" : "border-rose-400/20"}`}>
                 <span className="text-xs text-muted-foreground">Supabase Connection</span>
-                <span className={`text-xs font-semibold ${sessionValid ? "text-emerald-300" : "text-rose-300"}`}>
-                  {sessionValid ? "Active" : "Inactive"}
+                <span className={`text-xs font-semibold ${supabaseConfigured ? "text-emerald-300" : "text-rose-300"}`}>
+                  {supabaseConfigured ? "Active" : "Missing Env"}
                 </span>
               </div>
 

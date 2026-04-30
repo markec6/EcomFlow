@@ -5,7 +5,7 @@ import { useParams } from "next/navigation"
 import Image from "next/image"
 import { Sidebar } from "@/components/dashboard/sidebar"
 import { Header } from "@/components/dashboard/header"
-import { fetchProductsFromSupabase, type ProductRecord } from "@/lib/products-engine"
+import { fetchProductsFromSupabase, seedProducts, type ProductRecord } from "@/lib/products-engine"
 import { getSupabaseClient } from "@/lib/supabase/client"
 import { BarChart3, Copy, Info } from "lucide-react"
 import { toast } from "sonner"
@@ -21,20 +21,35 @@ export default function ProductDetailsPage() {
   const [units, setUnits] = useState(100)
 
   useEffect(() => {
+    const id = params.id
+    console.log("Fetching product with ID:", id)
     const client = getSupabaseClient()
+    const loadFallbackProduct = async () => {
+      const rows = await fetchProductsFromSupabase()
+      const fallbackProduct = rows.find((item) => item.id === id) ?? seedProducts.find((item) => item.id === id) ?? null
+      setProduct((fallbackProduct ?? null) as ProductRecord | null)
+      setIsLoading(false)
+    }
+
     if (!client) {
-      fetchProductsFromSupabase().then((rows) => {
-        setProduct((rows.find((item) => item.id === params.id) ?? null) as ProductRecord | null)
-        setIsLoading(false)
-      })
+      console.error("Supabase product client unavailable. Check NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY.")
+      void loadFallbackProduct()
       return
     }
+
     client
       .from("products")
       .select("id,name,category,image_url,base_cost,market_price,margin,trend_data,saturation_score,competitors,ai_copy_variations")
-      .eq("id", params.id)
-      .single()
-      .then(({ data }) => {
+      .eq("id", id)
+      .maybeSingle()
+      .then(async ({ data, error }) => {
+        if (error) {
+          console.error("Product fetch error:", error)
+        }
+        if (!data) {
+          await loadFallbackProduct()
+          return
+        }
         setProduct((data as ProductRecord | null) ?? null)
         setIsLoading(false)
       })

@@ -6,6 +6,10 @@ export function getURL(path = "") {
     process.env.NEXT_PUBLIC_VERCEL_URL ??
     (typeof window !== "undefined" ? window.location.origin : "")
 
+  if (!url) {
+    throw new Error("Missing site URL. Set NEXT_PUBLIC_SITE_URL or NEXT_PUBLIC_VERCEL_URL.")
+  }
+
   url = url.includes("http") ? url : `https://${url}`
   url = url.endsWith("/") ? url : `${url}/`
 
