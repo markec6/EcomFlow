@@ -64,7 +64,8 @@ export function ProductGrid({ searchQuery }: ProductGridProps) {
     if (isGuest) {
       window.setTimeout(() => {
         toast.success(`Guest scan used for ${productTitle}`, { id: `credits-${productId}` })
-        setSpendingProductId(null)
+        setActiveProductId(productId)
+        router.push(`/products/${productId}`)
       }, 500)
       return
     }
@@ -76,7 +77,7 @@ export function ProductGrid({ searchQuery }: ProductGridProps) {
     setIsRedirecting(true)
     setActiveProductId(productId)
     toast.success(`Deep Analysis started for ${productTitle}`, { id: `credits-${productId}` })
-    router.push(`/product/${productId}`)
+    router.push(`/products/${productId}`)
     window.setTimeout(() => {
       setSpendingProductId(null)
       setIsRedirecting(false)

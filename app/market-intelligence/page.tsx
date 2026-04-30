@@ -165,7 +165,7 @@ export default function MarketIntelligencePage() {
       }
       toast.success("Guest deep research started.")
       setIsRedirecting(true)
-      window.location.href = `/product/${productId}`
+      window.location.href = `/products/${productId}`
       return
     }
 
@@ -187,7 +187,7 @@ export default function MarketIntelligencePage() {
     setIsRedirecting(true)
     await auth.auth.getSession()
     router.refresh()
-    window.location.href = `/product/${productId}`
+    window.location.href = `/products/${productId}`
   }
 
   return (

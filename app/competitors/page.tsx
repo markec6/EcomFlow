@@ -133,7 +133,7 @@ export default function CompetitorsPage() {
       toast.success("Guest deep scan started.")
       if (selectedProductId) {
         setIsRedirecting(true)
-        window.location.href = `/product/${selectedProductId}`
+        window.location.href = `/products/${selectedProductId}`
       } else {
         setScanningRows((current) => ({ ...current, [rowId]: false }))
       }
@@ -160,7 +160,7 @@ export default function CompetitorsPage() {
       setIsRedirecting(true)
       await auth.auth.getSession()
       router.refresh()
-      window.location.href = `/product/${selectedProductId}`
+      window.location.href = `/products/${selectedProductId}`
       return
     }
     setScanningRows((current) => ({ ...current, [rowId]: false }))

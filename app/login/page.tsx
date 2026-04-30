@@ -71,7 +71,7 @@ export default function LoginPage() {
     if (!email) return toast.error("Enter email for magic link.")
     setLoading(true)
     const supabase = getAuthClient()
-    const { error } = await supabase.auth.signInWithOtp({ email, options: { emailRedirectTo: getURL("/market-intelligence") } })
+    const { error } = await supabase.auth.signInWithOtp({ email, options: { emailRedirectTo: getURL("/dashboard") } })
     setLoading(false)
     if (error) return toast.error(error.message)
     toast.success("Magic link sent. Check your inbox.")

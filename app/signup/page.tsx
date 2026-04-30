@@ -48,7 +48,7 @@ export default function SignupPage() {
     const { data, error: signupError } = await supabase.auth.signUp({
       email,
       password,
-      options: { emailRedirectTo: getURL("/market-intelligence") },
+      options: { emailRedirectTo: getURL("/dashboard") },
     })
     console.log("SUPABASE RESPONSE:", data, signupError)
     if (signupError) {
@@ -106,7 +106,7 @@ export default function SignupPage() {
     if (usernameTaken) return toast.error("Username is already taken.")
     setLoading(true)
     const supabase = getAuthClient()
-    const { error } = await supabase.auth.signInWithOtp({ email, options: { emailRedirectTo: getURL("/market-intelligence") } })
+    const { error } = await supabase.auth.signInWithOtp({ email, options: { emailRedirectTo: getURL("/dashboard") } })
     if (!error) {
       const {
         data: { user },
