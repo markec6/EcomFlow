@@ -418,7 +418,7 @@ export default function CompetitorsPage() {
           </DialogHeader>
           <DialogFooter>
             <button
-              onClick={() => router.push("/signup")}
+              onClick={() => router.push("/login")}
               className="px-4 py-2 rounded-lg bg-gradient-to-r from-violet-600 to-purple-500 text-white"
             >
               Sign up to claim 300 Credits

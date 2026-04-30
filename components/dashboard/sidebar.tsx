@@ -15,7 +15,7 @@ import { usePathname } from "next/navigation"
 import { cn } from "@/lib/utils"
 
 const navItems = [
-  { icon: House, label: "Home", href: "/" },
+  { icon: House, label: "Home", href: "/home" },
   { icon: Globe, label: "Market Intelligence", href: "/market-intelligence" },
   { icon: Gem, label: "Vault", href: "/vault" },
   { icon: FlaskConical, label: "Outreach Lab", href: "#" },

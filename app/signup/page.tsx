@@ -7,6 +7,7 @@ import { Eye, EyeOff, Loader2, Mail } from "lucide-react"
 import { toast } from "sonner"
 import { getAuthClient } from "@/lib/supabase/auth-client"
 import { clearClientSessionData } from "@/hooks/use-ai-credits"
+import { getURL } from "@/lib/site-url"
 
 export default function SignupPage() {
   const [mode, setMode] = useState<"email" | "magic">("email")
@@ -47,7 +48,7 @@ export default function SignupPage() {
     const { data, error: signupError } = await supabase.auth.signUp({
       email,
       password,
-      options: { emailRedirectTo: `${window.location.origin}/market-intelligence` },
+      options: { emailRedirectTo: getURL("/market-intelligence") },
     })
     console.log("SUPABASE RESPONSE:", data, signupError)
     if (signupError) {
@@ -105,7 +106,7 @@ export default function SignupPage() {
     if (usernameTaken) return toast.error("Username is already taken.")
     setLoading(true)
     const supabase = getAuthClient()
-    const { error } = await supabase.auth.signInWithOtp({ email, options: { emailRedirectTo: `${window.location.origin}/market-intelligence` } })
+    const { error } = await supabase.auth.signInWithOtp({ email, options: { emailRedirectTo: getURL("/market-intelligence") } })
     if (!error) {
       const {
         data: { user },

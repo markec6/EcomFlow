@@ -10,6 +10,7 @@ import { Switch } from "@/components/ui/switch"
 import { getAuthClient } from "@/lib/supabase/auth-client"
 import { toast } from "sonner"
 import { useAiCredits } from "@/hooks/use-ai-credits"
+import { getURL } from "@/lib/site-url"
 
 const PROFILE_EVENT = "ecomflow-profile-sync"
 
@@ -62,7 +63,7 @@ export default function SettingsPage() {
   const [emailAlerts, setEmailAlerts] = useState(true)
   const [publicProfile, setPublicProfile] = useState(false)
   const [userEmail, setUserEmail] = useState<string | null>(null)
-  const { profile } = useAiCredits()
+  const { profile, isGuest } = useAiCredits()
   const fileInputRef = useRef<HTMLInputElement | null>(null)
 
   useEffect(() => {
@@ -145,7 +146,6 @@ export default function SettingsPage() {
       const { data: userData } = await supabase.auth.getUser()
       if (!userData.user?.id) {
         toast.error("Please log in to update your profile picture.")
-        window.location.href = "/login"
         return
       }
 
@@ -267,7 +267,7 @@ export default function SettingsPage() {
     setSendingReset(true)
     const supabase = getAuthClient()
     const { error } = await supabase.auth.resetPasswordForEmail(userEmail, {
-      redirectTo: `${window.location.origin}/login`,
+      redirectTo: getURL("/login"),
     })
     setSendingReset(false)
     if (error) {
@@ -302,6 +302,20 @@ export default function SettingsPage() {
             <h1 className="text-2xl font-bold text-foreground">Settings</h1>
             <p className="text-sm text-muted-foreground mt-1">Manage identity, preferences, notifications, and account security.</p>
           </div>
+
+          {isGuest && (
+            <div className="glass-panel rounded-xl border border-primary/20 p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+              <p className="text-sm text-muted-foreground">
+                Logged-in users can save permanent settings.
+              </p>
+              <button
+                onClick={() => router.push("/login")}
+                className="px-4 py-2 rounded-xl bg-gradient-to-r from-violet-600 to-purple-500 text-white text-sm font-semibold"
+              >
+                Login
+              </button>
+            </div>
+          )}
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-5 items-stretch">
             <SettingsCard title="Profile Picture" description="Upload a public avatar used across your dashboard.">
