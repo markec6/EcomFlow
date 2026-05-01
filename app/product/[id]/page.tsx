@@ -78,7 +78,7 @@ export default function ProductDetailsPage() {
     <div className="relative min-h-screen bg-background overflow-hidden">
       <Sidebar />
       <Header searchQuery={searchQuery} onSearchChange={setSearchQuery} />
-      <main className="relative z-10 pl-14 sm:pl-16 pt-16">
+      <main className="relative z-10 pl-[var(--content-offset,0px)] pt-16 transition-[padding] duration-300 ease-in-out">
         <div className="p-4 md:p-6">
           {isLoading ? (
             <div className="h-[420px] rounded-xl glass-panel border border-primary/20 animate-pulse" />

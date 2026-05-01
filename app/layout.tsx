@@ -4,7 +4,14 @@ import { Analytics } from '@vercel/analytics/next'
 import { ClerkProvider } from "@clerk/nextjs"
 import { ThemeProvider } from '@/components/theme-provider'
 import { Toaster } from '@/components/ui/sonner'
+import { SidebarStateProvider } from "@/components/dashboard/sidebar-state"
 import './globals.css'
+
+const clerkPublishableKey = process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY
+
+if (!clerkPublishableKey) {
+  throw new Error("Missing NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY")
+}
 
 const inter = Inter({ subsets: ["latin"], variable: "--font-inter" });
 const geistMono = Geist_Mono({ subsets: ["latin"], variable: "--font-mono" });
@@ -40,9 +47,11 @@ export default function RootLayout({
   return (
     <html lang="en" className="dark bg-background" suppressHydrationWarning={true}>
       <body className={`${inter.variable} ${geistMono.variable} font-sans antialiased`} suppressHydrationWarning={true}>
-        <ClerkProvider>
+        <ClerkProvider publishableKey={clerkPublishableKey}>
           <ThemeProvider attribute="class" defaultTheme="dark" enableSystem={false} disableTransitionOnChange>
-            {children}
+            <SidebarStateProvider>
+              {children}
+            </SidebarStateProvider>
             <Toaster />
           </ThemeProvider>
         </ClerkProvider>

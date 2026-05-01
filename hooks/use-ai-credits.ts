@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react"
 import { useAuth, useUser } from "@clerk/nextjs"
 import { getSupabaseClient } from "@/lib/supabase/client"
+import { fetchSupabaseCredits, getWritableSupabaseClient } from "@/lib/auth/supabase-user-sync"
 
 const CREDIT_EVENT = "ecomflow-credits-sync"
 const PROFILE_EVENT = "ecomflow-profile-sync"
@@ -14,6 +15,12 @@ type ProfileSummary = {
   fullName: string | null
   username: string | null
   avatarUrl: string | null
+}
+
+type ProfileRow = {
+  full_name: string | null
+  username: string | null
+  avatar_url: string | null
 }
 
 export function clearClientSessionData() {
@@ -82,14 +89,17 @@ export function useAiCredits() {
     setIsGuest(false)
     setUserId(clerkUserId)
     setUserEmail(user?.primaryEmailAddress?.emailAddress ?? null)
-    const { data: profileData } = await client
+    const [nextCredits, profileResult] = await Promise.all([
+      fetchSupabaseCredits(clerkUserId),
+      client
       .from("profiles")
       .select("ai_credits_remaining,full_name,username,avatar_url")
       .eq("id", clerkUserId)
-      .single()
+      .maybeSingle(),
+    ])
 
-    const nextCredits = Number(profileData?.ai_credits_remaining ?? 0)
     const normalizedCredits = Number.isFinite(nextCredits) ? nextCredits : 0
+    const profileData = profileResult.data as ProfileRow | null
     commitCredits(normalizedCredits)
     setProfile({
       fullName: (profileData?.full_name as string | null | undefined) ?? null,
@@ -121,9 +131,12 @@ export function useAiCredits() {
       guestCreditsRef.current = nextGuestCredits
       window.localStorage.setItem(GUEST_CREDIT_KEY, String(nextGuestCredits))
     } else {
-      const client = getSupabaseClient()
+      const client = getWritableSupabaseClient()
       if (client) {
-        await client.from("profiles").update({ ai_credits_remaining: normalized }).eq("id", userId)
+        await Promise.all([
+          client.from("users").update({ credits: normalized }).eq("id", userId),
+          client.from("profiles").update({ ai_credits_remaining: normalized }).eq("id", userId),
+        ])
       }
     }
     window.dispatchEvent(new Event(CREDIT_EVENT))

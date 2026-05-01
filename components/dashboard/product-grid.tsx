@@ -53,7 +53,7 @@ export function ProductGrid({ searchQuery }: ProductGridProps) {
     const creditSpent = await decrementCredit()
     if (!creditSpent) {
       if (isGuest) {
-        router.push("/login")
+        setShowGuestLock(true)
         return
       }
       setShowBuyMore(true)
@@ -143,7 +143,7 @@ export function ProductGrid({ searchQuery }: ProductGridProps) {
           </DialogHeader>
           <DialogFooter>
             <button
-              onClick={() => router.push("/login")}
+              onClick={() => router.push("/signup")}
               className="px-4 py-2 rounded-lg bg-gradient-to-r from-violet-600 to-purple-500 text-white"
             >
               Sign up to claim 300 Credits

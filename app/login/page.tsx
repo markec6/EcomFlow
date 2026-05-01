@@ -2,32 +2,29 @@
 
 import Link from "next/link"
 import { useRouter } from "next/navigation"
-import { FormEvent, useEffect, useState } from "react"
+import { FormEvent, useState } from "react"
 import { AnimatePresence, motion } from "framer-motion"
 import { Eye, EyeOff, Loader2, Mail } from "lucide-react"
 import { toast } from "sonner"
-import { useAuth, useSignIn } from "@clerk/nextjs"
+import { useSignIn } from "@clerk/nextjs/legacy"
 import { clearClientSessionData } from "@/hooks/use-ai-credits"
+import { fetchSupabaseCredits } from "@/lib/auth/supabase-user-sync"
 
 export default function LoginPage() {
   const router = useRouter()
-  const { isSignedIn } = useAuth()
   const { isLoaded, signIn, setActive } = useSignIn()
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
   const [rememberMe, setRememberMe] = useState(true)
   const [showPassword, setShowPassword] = useState(false)
   const [loading, setLoading] = useState(false)
-  const [redirecting, setRedirecting] = useState(false)
+  const [authError, setAuthError] = useState<string | null>(null)
   const [focused, setFocused] = useState<"email" | "password" | null>(null)
-
-  useEffect(() => {
-    if (isSignedIn) router.replace("/market-intelligence")
-  }, [isSignedIn, router])
 
   const onLogin = async (event: FormEvent) => {
     event.preventDefault()
     if (!isLoaded || !signIn) return
+    setAuthError(null)
     setLoading(true)
     try {
       const result = await signIn.create({
@@ -36,18 +33,26 @@ export default function LoginPage() {
       })
       if (result.status !== "complete") {
         setLoading(false)
+        setAuthError("Unable to complete sign in.")
         toast.error("Unable to complete sign in.")
         return
       }
       await setActive?.({ session: result.createdSessionId })
+      const signedInUserId =
+        (result as { createdUserId?: string }).createdUserId ?? (signIn as { createdUserId?: string }).createdUserId
+      const currentCredits = signedInUserId ? await fetchSupabaseCredits(signedInUserId) : null
       setLoading(false)
-      setRedirecting(true)
-      toast.success(`Welcome back, ${email || "Trader"}!`)
       clearClientSessionData()
-      window.location.href = "/market-intelligence"
+      toast.success(
+        currentCredits === null
+          ? `Welcome back, ${email || "Trader"}!`
+          : `Welcome back, ${email || "Trader"}! ${currentCredits} credits available.`
+      )
+      router.refresh()
     } catch (error) {
       setLoading(false)
       const message = (error as { errors?: { message?: string }[] } | undefined)?.errors?.[0]?.message
+      setAuthError(message ?? "Incorrect email or password.")
       toast.error(message ?? "Incorrect email or password.")
       return
     }
@@ -56,6 +61,7 @@ export default function LoginPage() {
   const onForgotPassword = async () => {
     if (!email) return toast.error("Enter your email first.")
     if (!isLoaded || !signIn) return
+    setAuthError(null)
     setLoading(true)
     try {
       await signIn.create({
@@ -65,6 +71,7 @@ export default function LoginPage() {
     } catch (error) {
       const message = (error as { errors?: { message?: string }[] } | undefined)?.errors?.[0]?.message
       setLoading(false)
+      setAuthError(message ?? "Could not send reset email.")
       toast.error(message ?? "Could not send reset email.")
       return
     }
@@ -82,6 +89,9 @@ export default function LoginPage() {
           <h1 className="text-2xl font-bold text-foreground">Welcome Back</h1>
           <p className="text-sm text-muted-foreground mt-1">Sign in to access your Intelligence workspace.</p>
         </div>
+        {authError && (
+          <p className="rounded-xl border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-200">{authError}</p>
+        )}
         <motion.div animate={focused === "email" ? { boxShadow: "0 0 0 1px rgba(139,92,246,0.6), 0 0 18px rgba(139,92,246,0.25)" } : { boxShadow: "none" }} className="rounded-xl">
           <div className="relative">
             <Mail className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
@@ -107,9 +117,9 @@ export default function LoginPage() {
                   Forgot Password?
                 </button>
               </div>
-              <button disabled={loading || redirecting} className="w-full h-11 rounded-xl bg-primary text-white font-medium disabled:opacity-70 inline-flex items-center justify-center gap-2">
-                {(loading || redirecting) && <Loader2 className="w-4 h-4 animate-spin" />}
-                {redirecting ? "Redirecting..." : loading ? "Signing in..." : "Sign In"}
+              <button disabled={loading} className="w-full h-11 rounded-xl bg-primary text-white font-medium disabled:opacity-70 inline-flex items-center justify-center gap-2">
+                {loading && <Loader2 className="w-4 h-4 animate-spin" />}
+                {loading ? "Signing in..." : "Sign In"}
               </button>
           </motion.div>
         </AnimatePresence>

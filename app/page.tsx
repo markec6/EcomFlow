@@ -21,7 +21,7 @@ export default function Dashboard() {
       <Header searchQuery={searchQuery} onSearchChange={setSearchQuery} />
 
       {/* Main Content Area */}
-      <main className="relative z-10 pl-14 sm:pl-16 pt-16">
+      <main className="relative z-10 pl-[var(--content-offset,0px)] pt-16 transition-[padding] duration-300 ease-in-out">
         <div className="flex flex-col xl:flex-row">
           {/* Main Content */}
           <div className="flex-1 p-4 md:p-6 max-w-full xl:max-w-[calc(100%-320px)]">

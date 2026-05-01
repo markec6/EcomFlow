@@ -23,6 +23,13 @@ export interface Profile {
   created_at: string
 }
 
+export interface SupabaseUser {
+  id: string
+  email: string | null
+  credits: number
+  created_at?: string
+}
+
 export interface Product {
   id: string
   name: string
@@ -99,6 +106,11 @@ export interface Database {
         Row: Profile
         Insert: Partial<Omit<Profile, "id" | "created_at">> & { id: string }
         Update: Partial<Omit<Profile, "id">>
+      }
+      users: {
+        Row: SupabaseUser
+        Insert: Partial<Omit<SupabaseUser, "id" | "created_at">> & { id: string }
+        Update: Partial<Omit<SupabaseUser, "id">>
       }
       products: {
         Row: Product

@@ -2,11 +2,12 @@
 
 import { memo, useEffect, useMemo, useState } from "react"
 import { AnimatePresence, motion } from "framer-motion"
-import { Search, Bell, Command, Zap, LogOut, UserCircle2, Settings, Menu } from "lucide-react"
+import { Search, Bell, Command, Zap, LogOut, UserCircle2, Settings, ChevronLeft, Menu } from "lucide-react"
 import { clearClientSessionData, useAiCredits } from "@/hooks/use-ai-credits"
 import { useAuth } from "@clerk/nextjs"
 import { useRouter } from "next/navigation"
 import { useIsMobile } from "@/hooks/use-mobile"
+import { useSidebarState } from "@/components/dashboard/sidebar-state"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -27,6 +28,7 @@ export const Header = memo(function Header({ searchQuery, onSearchChange }: Head
   const { signOut } = useAuth()
   const { credits, isGuest, userEmail, profile } = useAiCredits()
   const isMobile = useIsMobile()
+  const { isOpen, toggleSidebar } = useSidebarState()
   const supabaseConfigured = Boolean(process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY)
   const sessionValid = !isGuest
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null)
@@ -78,7 +80,26 @@ export const Header = memo(function Header({ searchQuery, onSearchChange }: Head
   )
 
   return (
-    <header className="fixed top-0 left-14 sm:left-16 right-0 h-16 flex items-center gap-3 px-3 sm:px-4 md:px-6 glass max-md:bg-card/95 border-b border-border/70 z-40 will-change-transform [transform:translateZ(0)]">
+    <header
+      style={{ left: "var(--content-offset, 0px)" }}
+      className="fixed top-0 right-0 h-16 flex items-center gap-3 px-3 sm:px-4 md:px-6 glass max-md:bg-card/95 border-b border-border/70 z-[100] will-change-[left,transform] [transform:translateZ(0)] transition-[left] duration-300 ease-in-out"
+    >
+      <button
+        type="button"
+        onClick={toggleSidebar}
+        className="relative min-w-11 min-h-11 w-11 h-11 shrink-0 rounded-xl glass-panel border border-primary/30 flex items-center justify-center text-primary touch-manipulation z-[110]"
+        aria-label={isOpen ? "Collapse sidebar" : "Expand sidebar"}
+      >
+        <motion.span
+          initial={false}
+          animate={{ rotate: isOpen ? 0 : 180 }}
+          transition={{ duration: 0.3, ease: "easeInOut" }}
+          className="inline-flex"
+        >
+          <ChevronLeft className="w-5 h-5" />
+        </motion.span>
+      </button>
+
       {/* Centered Search */}
       <motion.div
         initial={isMobile ? false : { y: -20, opacity: 0 }}

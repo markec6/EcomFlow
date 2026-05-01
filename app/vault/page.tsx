@@ -121,7 +121,7 @@ export default function VaultPage() {
       <Sidebar />
       <Header searchQuery={searchQuery} onSearchChange={setSearchQuery} />
 
-      <main className="relative z-10 pl-14 sm:pl-16 pt-16">
+      <main className="relative z-10 pl-[var(--content-offset,0px)] pt-16 transition-[padding] duration-300 ease-in-out">
         <div className="p-4 md:p-6">
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="mb-6">
             <h1 className="text-2xl font-bold text-foreground">Product Vault</h1>

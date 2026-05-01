@@ -4,6 +4,8 @@
 @custom-variant dark (&:is(.dark *));
 
 :root {
+  --sidebar-width: 0px;
+  --content-offset: 0px;
   --background: #06070d;
   --foreground: #FAFAFA;
   --card: #101126;

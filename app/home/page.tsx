@@ -17,7 +17,7 @@ export default function HomeDashboard() {
       <Sidebar />
       <Header searchQuery={searchQuery} onSearchChange={setSearchQuery} />
 
-      <main className="relative z-10 pl-14 sm:pl-16 pt-16">
+      <main className="relative z-10 pl-[var(--content-offset,0px)] pt-16 transition-[padding] duration-300 ease-in-out">
         <div className="flex flex-col xl:flex-row">
           <div className="flex-1 p-4 md:p-6 max-w-full xl:max-w-[calc(100%-320px)]">
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="mb-6">

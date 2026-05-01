@@ -188,7 +188,7 @@ export default function MarketIntelligencePage() {
     <div className="relative min-h-screen bg-background overflow-hidden">
       <Sidebar />
       <Header searchQuery={searchQuery} onSearchChange={setSearchQuery} />
-      <main className="relative z-10 pl-14 sm:pl-16 pt-16">
+      <main className="relative z-10 pl-[var(--content-offset,0px)] pt-16 transition-[padding] duration-300 ease-in-out">
         <div className="p-4 md:p-6">
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="mb-6">
             <h1 className="text-2xl font-bold text-foreground">Market Intelligence War Room</h1>
@@ -346,7 +346,7 @@ export default function MarketIntelligencePage() {
           </DialogHeader>
           <DialogFooter>
             <button
-              onClick={() => router.push("/login")}
+              onClick={() => router.push("/signup")}
               className="px-4 py-2 rounded-lg bg-gradient-to-r from-violet-600 to-purple-500 text-white"
             >
               Sign up to claim 300 Credits
