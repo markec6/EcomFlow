@@ -4,10 +4,11 @@ import { memo, useEffect, useMemo, useState } from "react"
 import { AnimatePresence, motion } from "framer-motion"
 import { Search, Bell, Command, Zap, LogOut, UserCircle2, Settings, ChevronLeft, Menu } from "lucide-react"
 import { clearClientSessionData, useAiCredits } from "@/hooks/use-ai-credits"
-import { useAuth } from "@clerk/nextjs"
+import { useAuth, useUser } from "@clerk/nextjs"
 import { useRouter } from "next/navigation"
 import { useIsMobile } from "@/hooks/use-mobile"
 import { useSidebarState } from "@/components/dashboard/sidebar-state"
+import { getSupabaseClient } from "@/lib/supabase/client"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -25,7 +26,8 @@ interface HeaderProps {
 
 export const Header = memo(function Header({ searchQuery, onSearchChange }: HeaderProps) {
   const router = useRouter()
-  const { signOut } = useAuth()
+  const { signOut, userId: clerkUserId } = useAuth()
+  const { user } = useUser()
   const { credits, isReady, isGuest, userEmail, profile } = useAiCredits()
   const isMobile = useIsMobile()
   const { isOpen, toggleSidebar } = useSidebarState()
@@ -35,15 +37,52 @@ export const Header = memo(function Header({ searchQuery, onSearchChange }: Head
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
 
   useEffect(() => {
-    setAvatarUrl(profile.avatarUrl ?? null)
-    const profileEventListener = () => {
-      setAvatarUrl(profile.avatarUrl ?? null)
+    let cancelled = false
+    const fallbackAvatarUrl = user?.imageUrl ?? profile.avatarUrl ?? null
+
+    const fetchProfileAvatar = async () => {
+      setAvatarUrl((current) => current ?? fallbackAvatarUrl)
+
+      if (isGuest || !clerkUserId) {
+        setAvatarUrl(fallbackAvatarUrl)
+        return
+      }
+
+      const supabase = getSupabaseClient()
+      if (!supabase) {
+        setAvatarUrl(fallbackAvatarUrl)
+        return
+      }
+
+      const profilesTable = supabase.from("profiles") as any
+      const { data, error } = await profilesTable
+        .select("avatar_url")
+        .eq("id", clerkUserId)
+        .maybeSingle()
+
+      if (cancelled) return
+      if (error) {
+        console.error("Header avatar fetch failed:", error)
+      }
+      setAvatarUrl(data?.avatar_url || fallbackAvatarUrl)
     }
+
+    void fetchProfileAvatar()
+
+    const profileEventListener = (event: Event) => {
+      const nextAvatarUrl = (event as CustomEvent<{ avatarUrl?: string }>).detail?.avatarUrl
+      if (nextAvatarUrl) {
+        setAvatarUrl(nextAvatarUrl)
+      }
+      void fetchProfileAvatar()
+    }
+
     window.addEventListener(PROFILE_EVENT, profileEventListener, { passive: true })
     return () => {
+      cancelled = true
       window.removeEventListener(PROFILE_EVENT, profileEventListener)
     }
-  }, [profile.avatarUrl])
+  }, [clerkUserId, isGuest, profile.avatarUrl, user?.imageUrl])
 
   const handleLogout = async () => {
     await signOut()

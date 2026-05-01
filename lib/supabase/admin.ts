@@ -4,11 +4,15 @@ import type { Database } from "@/types/database"
 let cachedAdminClient: ReturnType<typeof createClient<Database>> | null = null
 
 export function getSupabaseAdminClient() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL
-  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+  const url = process.env.SUPABASE_URL ?? process.env.NEXT_PUBLIC_SUPABASE_URL
+  const serviceRoleKey =
+    process.env.SUPABASE_SERVICE_ROLE_KEY ??
+    process.env.SUPABASE_SERVICE_KEY
 
   if (!url || !serviceRoleKey) {
-    console.error("Missing Supabase admin variables: NEXT_PUBLIC_SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY.")
+    console.error(
+      "Missing Supabase admin variables: set SUPABASE_SERVICE_ROLE_KEY and NEXT_PUBLIC_SUPABASE_URL (or SUPABASE_URL)."
+    )
     return null
   }
 

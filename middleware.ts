@@ -1,11 +1,26 @@
 import { clerkMiddleware, createRouteMatcher } from "@clerk/nextjs/server"
+import { NextResponse } from "next/server"
 
-const isPublicRoute = createRouteMatcher(["/", "/login(.*)", "/signup(.*)", "/sign-up(.*)"])
+const isProtectedRoute = createRouteMatcher([
+  "/settings(.*)",
+])
 
-export default clerkMiddleware(async (_auth, request) => {
-  if (isPublicRoute(request)) return
+export default clerkMiddleware(async (auth, request) => {
+  if (!isProtectedRoute(request)) {
+    return NextResponse.next()
+  }
+
+  try {
+    await auth.protect()
+    return NextResponse.next()
+  } catch (error) {
+    console.error("Protected route auth failed:", error)
+    const loginUrl = new URL("/login", request.url)
+    loginUrl.searchParams.set("redirect_url", request.nextUrl.pathname)
+    return NextResponse.redirect(loginUrl)
+  }
 })
 
 export const config = {
-  matcher: ["/((?!.+\\.[\\w]+$|_next).*)", "/", "/(api|trpc)(.*)"],
+  matcher: ["/settings/:path*"],
 }

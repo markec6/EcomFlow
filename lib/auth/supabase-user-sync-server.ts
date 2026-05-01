@@ -15,7 +15,9 @@ function toNumber(value: unknown, fallback = 0) {
 
 export async function ensureSupabaseProfileServer(input: EnsureServerProfileInput) {
   const admin = getSupabaseAdminClient()
-  if (!admin) return null
+  if (!admin) {
+    throw new Error("Supabase admin client is unavailable. Check SUPABASE_SERVICE_ROLE_KEY.")
+  }
 
   const email = input.email.trim().toLowerCase()
   if (!input.clerkUserId || !email) return null
@@ -30,6 +32,7 @@ export async function ensureSupabaseProfileServer(input: EnsureServerProfileInpu
     return {
       id: String(byId.id),
       credits: toNumber(byId.ai_credits_remaining, toNumber(byId.credits, SIGNUP_CREDITS)),
+      created: false,
     }
   }
 
@@ -43,6 +46,7 @@ export async function ensureSupabaseProfileServer(input: EnsureServerProfileInpu
     return {
       id: String(byEmail.id),
       credits: toNumber(byEmail.ai_credits_remaining, toNumber(byEmail.credits, SIGNUP_CREDITS)),
+      created: false,
     }
   }
 
@@ -54,6 +58,11 @@ export async function ensureSupabaseProfileServer(input: EnsureServerProfileInpu
     total_credits_used: 0,
   }
 
+  console.log("[Webhook][Log 3] Supabase insert attempted with Data:", {
+    id: input.clerkUserId,
+    email,
+  })
+
   const { data, error } = await admin
     .from("profiles")
     .upsert(insertPayload, { onConflict: "id" })
@@ -61,12 +70,13 @@ export async function ensureSupabaseProfileServer(input: EnsureServerProfileInpu
     .single()
 
   if (error) {
-    console.error("Server profile sync failed:", error)
-    return null
+    console.error("[Webhook][Log 4] Supabase Error:", error)
+    throw new Error(`Supabase profile sync failed: ${String(error.message ?? "unknown error")}`)
   }
 
   return {
     id: String(data?.id ?? input.clerkUserId),
     credits: toNumber(data?.ai_credits_remaining, toNumber(data?.credits, SIGNUP_CREDITS)),
+    created: true,
   }
 }

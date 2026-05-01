@@ -80,13 +80,13 @@ export default function SettingsPage() {
   const [emailAlerts, setEmailAlerts] = useState(true)
   const [publicProfile, setPublicProfile] = useState(false)
   const [userEmail, setUserEmail] = useState<string | null>(null)
-  const { profile, isGuest, userId: profileId } = useAiCredits()
+  const { profile, isGuest } = useAiCredits()
   const fileInputRef = useRef<HTMLInputElement | null>(null)
 
   useEffect(() => {
     const loadSettings = async () => {
       const supabase = getSupabaseClient()
-      if (!supabase || !isSignedIn || !profileId) {
+      if (!supabase || !isSignedIn || !clerkUserId) {
         setLoadingSettings(false)
         return
       }
@@ -95,14 +95,14 @@ export default function SettingsPage() {
       let { data, error } = await supabase
         .from("profiles")
         .select("full_name,public_bio,avatar_url,theme_preference,dark_mode,email_alerts,public_profile")
-        .eq("id", profileId)
+        .eq("id", clerkUserId)
         .single()
 
       if (error && String(error.message ?? "").toLowerCase().includes("theme_preference")) {
         const fallback = await supabase
           .from("profiles")
           .select("full_name,public_bio,avatar_url,dark_mode,email_alerts,public_profile")
-          .eq("id", profileId)
+          .eq("id", clerkUserId)
           .single()
         data = fallback.data
         error = fallback.error
@@ -111,7 +111,7 @@ export default function SettingsPage() {
       const settings = data as ProfileSettings | null
       setFullName(settings?.full_name ?? "")
       setPublicBio(settings?.public_bio ?? "")
-      setCurrentAvatarUrl(settings?.avatar_url ?? null)
+      setCurrentAvatarUrl(settings?.avatar_url || user?.imageUrl || null)
       const persistedTheme = settings?.theme_preference ?? (settings?.dark_mode === false ? "light" : "dark")
       setDarkMode(persistedTheme !== "light")
       setTheme(persistedTheme)
@@ -121,7 +121,7 @@ export default function SettingsPage() {
     }
 
     void loadSettings()
-  }, [isSignedIn, profileId, setTheme, user?.primaryEmailAddress?.emailAddress])
+  }, [clerkUserId, isSignedIn, setTheme, user?.imageUrl, user?.primaryEmailAddress?.emailAddress])
 
   useEffect(() => {
     // Do not let an empty profile snapshot overwrite a freshly uploaded URL.
@@ -168,48 +168,34 @@ export default function SettingsPage() {
     if (!validateFile(file)) return
 
     setUploading(true)
-    const supabase = getSupabaseClient()
     try {
-      if (!supabase || !profileId || !clerkUserId) {
+      if (!clerkUserId) {
         toast.error("Please log in to update your profile picture.")
         return
       }
 
-      const filePath = `avatars/${clerkUserId}/${Date.now()}-${file.name}`
-      const { data: uploadData, error: uploadError } = await supabase.storage
-        .from("avatars")
-        .upload(filePath, file, {
-          cacheControl: "3600",
-          upsert: true,
-          contentType: file.type,
-        })
+      const body = new FormData()
+      body.append("file", file)
+      const response = await fetch("/api/profile/avatar", {
+        method: "POST",
+        body,
+      })
+      const result = (await response.json()) as { ok?: boolean; avatarUrl?: string; error?: string }
 
-      if (uploadError || !uploadData) {
-        toast.error("Greška pri prenosu slike na server.")
-        return
+      if (!response.ok || !result.ok || !result.avatarUrl) {
+        throw new Error(result.error ?? "Failed to save avatar URL to profile")
       }
 
-      const { data } = supabase.storage.from("avatars").getPublicUrl(filePath)
-      const profilesTable = supabase.from("profiles") as any
-      const { data: persistedProfile, error: persistError } = await profilesTable
-        .upsert({ id: profileId, avatar_url: data.publicUrl }, { onConflict: "id" })
-        .select("id,avatar_url")
-        .single()
-
-      if (persistError || !persistedProfile?.avatar_url) {
-        console.error("DB Update Error:", persistError)
-        throw new Error("Failed to save avatar URL to profile")
-      }
-
-      console.log("Image successfully persisted to DB:", data.publicUrl)
-      setCurrentAvatarUrl(data.publicUrl)
-      setUploadedAvatarUrl(data.publicUrl)
+      setCurrentAvatarUrl(result.avatarUrl)
+      setUploadedAvatarUrl(result.avatarUrl)
+      setSelectedFile(null)
+      setPreviewUrl(null)
       if (fileInputRef.current) fileInputRef.current.value = ""
-      window.dispatchEvent(new Event(PROFILE_EVENT))
+      window.dispatchEvent(new CustomEvent(PROFILE_EVENT, { detail: { avatarUrl: result.avatarUrl } }))
       router.refresh()
       toast.success("Profile picture updated.")
     } catch (error) {
-      if (error instanceof Error && error.message === "Failed to save avatar URL to profile") {
+      if (error instanceof Error && error.message.includes("profile")) {
         toast.error("Greška pri čuvanju linka slike u bazi.")
       } else {
         console.error("Upload Error:", error)
@@ -224,7 +210,7 @@ export default function SettingsPage() {
     event.preventDefault()
     setSavingInfo(true)
     const supabase = getSupabaseClient()
-    if (!supabase || !profileId) {
+    if (!supabase || !clerkUserId) {
       setSavingInfo(false)
       toast.error("Please log in to update your profile.")
       return
@@ -234,7 +220,7 @@ export default function SettingsPage() {
     const { error } = await profilesTable
       .upsert(
         {
-          id: profileId,
+          id: clerkUserId,
           full_name: fullName.trim() || null,
           public_bio: publicBio.trim() || null,
         },
@@ -257,7 +243,7 @@ export default function SettingsPage() {
   ): Promise<boolean> => {
     setSavingPreferences(true)
     const supabase = getSupabaseClient()
-    if (!supabase || !profileId) {
+    if (!supabase || !clerkUserId) {
       setSavingPreferences(false)
       return false
     }
@@ -265,7 +251,7 @@ export default function SettingsPage() {
     const profilesTable = supabase.from("profiles") as any
     let { error } = await profilesTable.upsert(
       {
-        id: profileId,
+        id: clerkUserId,
         theme_preference: nextDarkMode ? "dark" : "light",
         dark_mode: nextDarkMode,
         email_alerts: nextEmailAlerts,
@@ -277,7 +263,7 @@ export default function SettingsPage() {
     if (error && String(error.message ?? "").toLowerCase().includes("theme_preference")) {
       const fallback = await profilesTable.upsert(
         {
-          id: profileId,
+          id: clerkUserId,
           dark_mode: nextDarkMode,
           email_alerts: nextEmailAlerts,
           public_profile: nextPublicProfile,
@@ -334,9 +320,9 @@ export default function SettingsPage() {
     setDeletingAccount(true)
     const supabase = getSupabaseClient()
     try {
-      if (supabase && profileId) {
+      if (supabase && clerkUserId) {
         const profilesTable = supabase.from("profiles") as any
-        await profilesTable.delete().eq("id", profileId)
+        await profilesTable.delete().eq("id", clerkUserId)
       }
 
       if (user) {
