@@ -2,16 +2,19 @@
 
 import Link from "next/link"
 import { useRouter } from "next/navigation"
-import { FormEvent, useState } from "react"
+import { FormEvent, useEffect, useState } from "react"
 import { AnimatePresence, motion } from "framer-motion"
 import { Eye, EyeOff, Loader2, Mail } from "lucide-react"
 import { toast } from "sonner"
+import { useAuth, useUser } from "@clerk/nextjs"
 import { useSignIn } from "@clerk/nextjs/legacy"
 import { clearClientSessionData } from "@/hooks/use-ai-credits"
-import { fetchSupabaseCredits } from "@/lib/auth/supabase-user-sync"
+import { ensureSupabaseProfile, fetchSupabaseCredits } from "../../lib/auth/supabase-user-sync"
 
 export default function LoginPage() {
   const router = useRouter()
+  const { isLoaded: authLoaded, isSignedIn, userId } = useAuth()
+  const { user } = useUser()
   const { isLoaded, signIn, setActive } = useSignIn()
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
@@ -20,6 +23,30 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false)
   const [authError, setAuthError] = useState<string | null>(null)
   const [focused, setFocused] = useState<"email" | "password" | null>(null)
+
+  useEffect(() => {
+    if (!authLoaded || !isSignedIn || !userId) return
+    const syncAndRedirect = async () => {
+      const emailAddress = user?.primaryEmailAddress?.emailAddress
+      if (emailAddress) {
+        await ensureSupabaseProfile({
+          clerkUserId: userId,
+          email: emailAddress,
+        })
+      }
+      clearClientSessionData()
+      router.replace("/dashboard")
+    }
+    void syncAndRedirect()
+  }, [authLoaded, isSignedIn, userId, user?.primaryEmailAddress?.emailAddress, router])
+
+  if (authLoaded && isSignedIn) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center px-4">
+        <p className="text-sm text-muted-foreground">Redirecting...</p>
+      </div>
+    )
+  }
 
   const onLogin = async (event: FormEvent) => {
     event.preventDefault()
@@ -40,7 +67,13 @@ export default function LoginPage() {
       await setActive?.({ session: result.createdSessionId })
       const signedInUserId =
         (result as { createdUserId?: string }).createdUserId ?? (signIn as { createdUserId?: string }).createdUserId
-      const currentCredits = signedInUserId ? await fetchSupabaseCredits(signedInUserId) : null
+      if (signedInUserId) {
+        await ensureSupabaseProfile({
+          clerkUserId: signedInUserId,
+          email,
+        })
+      }
+      const currentCredits = signedInUserId ? await fetchSupabaseCredits(signedInUserId, email) : null
       setLoading(false)
       clearClientSessionData()
       toast.success(
@@ -48,10 +81,24 @@ export default function LoginPage() {
           ? `Welcome back, ${email || "Trader"}!`
           : `Welcome back, ${email || "Trader"}! ${currentCredits} credits available.`
       )
+      router.push("/dashboard")
       router.refresh()
     } catch (error) {
       setLoading(false)
-      const message = (error as { errors?: { message?: string }[] } | undefined)?.errors?.[0]?.message
+      const message = (error as { errors?: { message?: string; code?: string }[] } | undefined)?.errors?.[0]?.message
+      const code = (error as { errors?: { message?: string; code?: string }[] } | undefined)?.errors?.[0]?.code
+      const normalized = String(message ?? "").toLowerCase()
+      if (code === "session_exists" || normalized.includes("session already exists")) {
+        if (userId) {
+          await ensureSupabaseProfile({
+            clerkUserId: userId,
+            email,
+          })
+        }
+        clearClientSessionData()
+        router.replace("/dashboard")
+        return
+      }
       setAuthError(message ?? "Incorrect email or password.")
       toast.error(message ?? "Incorrect email or password.")
       return

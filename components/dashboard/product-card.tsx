@@ -175,7 +175,9 @@ export const ProductCard = memo(function ProductCard({
           src={product.image}
           alt={product.title}
           fill
-          loading="lazy"
+          loading={index < 2 ? "eager" : "lazy"}
+          priority={index < 2}
+          sizes="(max-width: 768px) 100vw, (max-width: 1280px) 50vw, 33vw"
           className="object-cover"
         />
         <div className="absolute inset-0 bg-gradient-to-t from-card via-transparent to-transparent" />

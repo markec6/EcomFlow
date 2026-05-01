@@ -7,10 +7,19 @@ import { useRouter } from "next/navigation"
 import { Sidebar } from "@/components/dashboard/sidebar"
 import { Header } from "@/components/dashboard/header"
 import { Switch } from "@/components/ui/switch"
-import { useAuth, useSignIn, useUser } from "@clerk/nextjs"
+import { useAuth, useUser } from "@clerk/nextjs"
 import { toast } from "sonner"
-import { useAiCredits } from "@/hooks/use-ai-credits"
+import { clearClientSessionData, useAiCredits } from "@/hooks/use-ai-credits"
 import { getSupabaseClient } from "@/lib/supabase/client"
+import { useTheme } from "next-themes"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
 
 const PROFILE_EVENT = "ecomflow-profile-sync"
 
@@ -18,6 +27,7 @@ type ProfileSettings = {
   full_name: string | null
   public_bio: string | null
   avatar_url: string | null
+  theme_preference: "dark" | "light" | null
   dark_mode: boolean | null
   email_alerts: boolean | null
   public_profile: boolean | null
@@ -45,15 +55,19 @@ function SettingsCard({
 
 export default function SettingsPage() {
   const router = useRouter()
-  const { userId, isSignedIn } = useAuth()
+  const { userId: clerkUserId, isSignedIn, signOut } = useAuth()
   const { user } = useUser()
-  const { signIn } = useSignIn()
+  const { setTheme } = useTheme()
   const [searchQuery, setSearchQuery] = useState("")
   const [uploading, setUploading] = useState(false)
   const [savingInfo, setSavingInfo] = useState(false)
   const [savingPreferences, setSavingPreferences] = useState(false)
   const [sendingReset, setSendingReset] = useState(false)
   const [deletingAccount, setDeletingAccount] = useState(false)
+  const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false)
+  const [showChangePasswordForm, setShowChangePasswordForm] = useState(false)
+  const [currentPassword, setCurrentPassword] = useState("")
+  const [newPassword, setNewPassword] = useState("")
   const [loadingSettings, setLoadingSettings] = useState(true)
   const [mockSyncing, setMockSyncing] = useState<"github" | "linkedin" | null>(null)
   const [previewUrl, setPreviewUrl] = useState<string | null>(null)
@@ -66,36 +80,48 @@ export default function SettingsPage() {
   const [emailAlerts, setEmailAlerts] = useState(true)
   const [publicProfile, setPublicProfile] = useState(false)
   const [userEmail, setUserEmail] = useState<string | null>(null)
-  const { profile, isGuest } = useAiCredits()
+  const { profile, isGuest, userId: profileId } = useAiCredits()
   const fileInputRef = useRef<HTMLInputElement | null>(null)
 
   useEffect(() => {
     const loadSettings = async () => {
       const supabase = getSupabaseClient()
-      if (!supabase || !isSignedIn || !userId) {
+      if (!supabase || !isSignedIn || !profileId) {
         setLoadingSettings(false)
         return
       }
       setUserEmail(user?.primaryEmailAddress?.emailAddress ?? null)
 
-      const { data } = await supabase
+      let { data, error } = await supabase
         .from("profiles")
-        .select("full_name,public_bio,avatar_url,dark_mode,email_alerts,public_profile")
-        .eq("id", userId)
+        .select("full_name,public_bio,avatar_url,theme_preference,dark_mode,email_alerts,public_profile")
+        .eq("id", profileId)
         .single()
+
+      if (error && String(error.message ?? "").toLowerCase().includes("theme_preference")) {
+        const fallback = await supabase
+          .from("profiles")
+          .select("full_name,public_bio,avatar_url,dark_mode,email_alerts,public_profile")
+          .eq("id", profileId)
+          .single()
+        data = fallback.data
+        error = fallback.error
+      }
 
       const settings = data as ProfileSettings | null
       setFullName(settings?.full_name ?? "")
       setPublicBio(settings?.public_bio ?? "")
       setCurrentAvatarUrl(settings?.avatar_url ?? null)
-      setDarkMode(settings?.dark_mode ?? true)
+      const persistedTheme = settings?.theme_preference ?? (settings?.dark_mode === false ? "light" : "dark")
+      setDarkMode(persistedTheme !== "light")
+      setTheme(persistedTheme)
       setEmailAlerts(settings?.email_alerts ?? true)
       setPublicProfile(settings?.public_profile ?? false)
       setLoadingSettings(false)
     }
 
     void loadSettings()
-  }, [isSignedIn, userId, user?.primaryEmailAddress?.emailAddress])
+  }, [isSignedIn, profileId, setTheme, user?.primaryEmailAddress?.emailAddress])
 
   useEffect(() => {
     // Do not let an empty profile snapshot overwrite a freshly uploaded URL.
@@ -144,12 +170,12 @@ export default function SettingsPage() {
     setUploading(true)
     const supabase = getSupabaseClient()
     try {
-      if (!supabase || !userId) {
+      if (!supabase || !profileId || !clerkUserId) {
         toast.error("Please log in to update your profile picture.")
         return
       }
 
-      const filePath = `${userId}/${Date.now()}-${file.name}`
+      const filePath = `avatars/${clerkUserId}/${Date.now()}-${file.name}`
       const { data: uploadData, error: uploadError } = await supabase.storage
         .from("avatars")
         .upload(filePath, file, {
@@ -166,7 +192,7 @@ export default function SettingsPage() {
       const { data } = supabase.storage.from("avatars").getPublicUrl(filePath)
       const profilesTable = supabase.from("profiles") as any
       const { data: persistedProfile, error: persistError } = await profilesTable
-        .upsert({ id: userId, avatar_url: data.publicUrl }, { onConflict: "id" })
+        .upsert({ id: profileId, avatar_url: data.publicUrl }, { onConflict: "id" })
         .select("id,avatar_url")
         .single()
 
@@ -198,7 +224,7 @@ export default function SettingsPage() {
     event.preventDefault()
     setSavingInfo(true)
     const supabase = getSupabaseClient()
-    if (!supabase || !userId) {
+    if (!supabase || !profileId) {
       setSavingInfo(false)
       toast.error("Please log in to update your profile.")
       return
@@ -208,7 +234,7 @@ export default function SettingsPage() {
     const { error } = await profilesTable
       .upsert(
         {
-          id: userId,
+          id: profileId,
           full_name: fullName.trim() || null,
           public_bio: publicBio.trim() || null,
         },
@@ -228,19 +254,19 @@ export default function SettingsPage() {
     nextDarkMode = darkMode,
     nextEmailAlerts = emailAlerts,
     nextPublicProfile = publicProfile
-  ) => {
+  ): Promise<boolean> => {
     setSavingPreferences(true)
     const supabase = getSupabaseClient()
-    if (!supabase || !userId) {
+    if (!supabase || !profileId) {
       setSavingPreferences(false)
-      toast.error("Please log in to update preferences.")
-      return
+      return false
     }
 
     const profilesTable = supabase.from("profiles") as any
-    const { error } = await profilesTable.upsert(
+    let { error } = await profilesTable.upsert(
       {
-        id: userId,
+        id: profileId,
+        theme_preference: nextDarkMode ? "dark" : "light",
         dark_mode: nextDarkMode,
         email_alerts: nextEmailAlerts,
         public_profile: nextPublicProfile,
@@ -248,44 +274,89 @@ export default function SettingsPage() {
       { onConflict: "id" }
     )
 
+    if (error && String(error.message ?? "").toLowerCase().includes("theme_preference")) {
+      const fallback = await profilesTable.upsert(
+        {
+          id: profileId,
+          dark_mode: nextDarkMode,
+          email_alerts: nextEmailAlerts,
+          public_profile: nextPublicProfile,
+        },
+        { onConflict: "id" }
+      )
+      error = fallback.error
+    }
+
     setSavingPreferences(false)
     if (error) {
       toast.error("Could not save preferences.")
-      return
+      return false
     }
+    setTheme(nextDarkMode ? "dark" : "light")
     toast.success("Preferences saved.")
+    return true
   }
 
-  const sendResetPassword = async () => {
-    if (!userEmail) {
-      toast.error("No email address found for this account.")
+  const changePassword = async () => {
+    if (!currentPassword || !newPassword) {
+      toast.error("Please fill current and new password.")
       return
     }
-    if (!signIn) {
-      toast.error("Reset flow is unavailable right now.")
+    if (newPassword.length < 8) {
+      toast.error("New password must be at least 8 characters.")
+      return
+    }
+    if (!user) {
+      toast.error("No active account found.")
       return
     }
     setSendingReset(true)
     try {
-      await signIn.create({
-        strategy: "reset_password_email_code",
-        identifier: userEmail,
+      await (user as unknown as {
+        updatePassword: (params: { currentPassword: string; newPassword: string }) => Promise<void>
+      }).updatePassword({
+        currentPassword,
+        newPassword,
       })
+      setCurrentPassword("")
+      setNewPassword("")
+      setShowChangePasswordForm(false)
+      toast.success("Password updated.")
     } catch (error) {
       const message = (error as { errors?: { message?: string }[] } | undefined)?.errors?.[0]?.message
+      toast.error(message ?? "Could not change password.")
+    } finally {
       setSendingReset(false)
-      toast.error(message ?? "Could not send reset email.")
-      return
     }
-    setSendingReset(false)
-    toast.success("Password reset email sent.")
   }
 
   const handleDeleteAccount = async () => {
     setDeletingAccount(true)
-    await new Promise<void>((resolve) => setTimeout(resolve, 700))
-    setDeletingAccount(false)
-    toast.error("Account deletion requires admin confirmation and is not enabled in this demo.")
+    const supabase = getSupabaseClient()
+    try {
+      if (supabase && profileId) {
+        const profilesTable = supabase.from("profiles") as any
+        await profilesTable.delete().eq("id", profileId)
+      }
+
+      if (user) {
+        await (user as unknown as { delete: () => Promise<void> }).delete()
+      }
+
+      await signOut()
+      clearClientSessionData()
+      window.localStorage.setItem("guest_credits", "3")
+      window.sessionStorage.setItem("guest_credits", "3")
+      setConfirmDeleteOpen(false)
+      toast.success("Account deleted.")
+      router.push("/")
+      router.refresh()
+    } catch (error) {
+      const message = (error as { errors?: { message?: string }[] } | undefined)?.errors?.[0]?.message
+      toast.error(message ?? "Could not delete account.")
+    } finally {
+      setDeletingAccount(false)
+    }
   }
 
   const runMockSync = async (provider: "github" | "linkedin") => {
@@ -425,8 +496,12 @@ export default function SettingsPage() {
                   checked={darkMode}
                   disabled={savingPreferences}
                   onCheckedChange={(checked) => {
+                    const previous = darkMode
                     setDarkMode(checked)
-                    void savePreferences(checked, emailAlerts, publicProfile)
+                    void (async () => {
+                      const ok = await savePreferences(checked, emailAlerts, publicProfile)
+                      if (!ok) setDarkMode(previous)
+                    })()
                   }}
                 />
               </div>
@@ -442,8 +517,12 @@ export default function SettingsPage() {
                   checked={emailAlerts}
                   disabled={savingPreferences}
                   onCheckedChange={(checked) => {
+                    const previous = emailAlerts
                     setEmailAlerts(checked)
-                    void savePreferences(darkMode, checked, publicProfile)
+                    void (async () => {
+                      const ok = await savePreferences(darkMode, checked, publicProfile)
+                      if (!ok) setEmailAlerts(previous)
+                    })()
                   }}
                 />
               </div>
@@ -456,8 +535,12 @@ export default function SettingsPage() {
                   checked={publicProfile}
                   disabled={savingPreferences}
                   onCheckedChange={(checked) => {
+                    const previous = publicProfile
                     setPublicProfile(checked)
-                    void savePreferences(darkMode, emailAlerts, checked)
+                    void (async () => {
+                      const ok = await savePreferences(darkMode, emailAlerts, checked)
+                      if (!ok) setPublicProfile(previous)
+                    })()
                   }}
                 />
               </div>
@@ -478,19 +561,45 @@ export default function SettingsPage() {
                 <div>
                   <p className="text-sm font-medium text-foreground">Change Password</p>
                   <p className="text-xs text-muted-foreground">
-                    Send a password reset link to {userEmail ?? "your account email"}.
+                      Update your password for {userEmail ?? "your account email"}.
                   </p>
                 </div>
               </div>
               <button
-                onClick={sendResetPassword}
+                  onClick={() => setShowChangePasswordForm((open) => !open)}
                 disabled={sendingReset}
                 className="px-4 py-2 rounded-xl border border-primary/30 text-primary disabled:opacity-70 inline-flex items-center justify-center gap-2"
               >
-                {sendingReset ? <Loader2 className="w-4 h-4 animate-spin" /> : <Lock className="w-4 h-4" />}
-                {sendingReset ? "Sending..." : "Change Password"}
+                  <Lock className="w-4 h-4" />
+                  {showChangePasswordForm ? "Hide Form" : "Change Password"}
               </button>
             </div>
+              {showChangePasswordForm && (
+                <div className="rounded-xl border border-white/10 bg-black/20 p-4 space-y-3">
+                  <input
+                    value={currentPassword}
+                    onChange={(event) => setCurrentPassword(event.target.value)}
+                    type="password"
+                    placeholder="Current Password"
+                    className="w-full h-11 rounded-xl border border-white/10 bg-black/30 px-3 text-sm text-foreground"
+                  />
+                  <input
+                    value={newPassword}
+                    onChange={(event) => setNewPassword(event.target.value)}
+                    type="password"
+                    placeholder="New Password"
+                    className="w-full h-11 rounded-xl border border-white/10 bg-black/30 px-3 text-sm text-foreground"
+                  />
+                  <button
+                    onClick={changePassword}
+                    disabled={sendingReset}
+                    className="px-4 py-2 rounded-xl bg-primary text-white disabled:opacity-70 inline-flex items-center justify-center gap-2"
+                  >
+                    {sendingReset && <Loader2 className="w-4 h-4 animate-spin" />}
+                    {sendingReset ? "Updating..." : "Update Password"}
+                  </button>
+                </div>
+              )}
             <div className="rounded-xl border border-rose-400/20 bg-rose-500/5 p-4">
               <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
                 <div>
@@ -498,7 +607,7 @@ export default function SettingsPage() {
                   <p className="text-xs text-rose-100/70 mt-1">Deleting an account is permanent and removes profile access.</p>
                 </div>
                 <button
-                  onClick={handleDeleteAccount}
+                  onClick={() => setConfirmDeleteOpen(true)}
                   disabled={deletingAccount}
                   className="px-4 py-2 rounded-xl border border-rose-400/30 bg-rose-500/10 text-rose-200 disabled:opacity-70 inline-flex items-center justify-center gap-2"
                 >
@@ -516,6 +625,34 @@ export default function SettingsPage() {
           </div>
         </div>
       </main>
+
+      <Dialog open={confirmDeleteOpen} onOpenChange={setConfirmDeleteOpen}>
+        <DialogContent className="glass-panel border border-rose-400/30 bg-slate-950/95">
+          <DialogHeader>
+            <DialogTitle className="text-foreground">Delete account?</DialogTitle>
+            <DialogDescription>
+              This will permanently remove your Clerk account and Supabase profile. This action cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <button
+              onClick={() => setConfirmDeleteOpen(false)}
+              className="px-4 py-2 rounded-lg border border-primary/30 text-primary"
+              disabled={deletingAccount}
+            >
+              Cancel
+            </button>
+            <button
+              onClick={handleDeleteAccount}
+              disabled={deletingAccount}
+              className="px-4 py-2 rounded-lg bg-rose-600 text-white disabled:opacity-70 inline-flex items-center gap-2"
+            >
+              {deletingAccount && <Loader2 className="w-4 h-4 animate-spin" />}
+              {deletingAccount ? "Deleting..." : "Yes, delete account"}
+            </button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

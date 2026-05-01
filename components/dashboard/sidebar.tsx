@@ -17,17 +17,17 @@ import { cn } from "@/lib/utils"
 import { useSidebarState } from "@/components/dashboard/sidebar-state"
 
 const navItems = [
-  { icon: House, ariaLabel: "Home", href: "/home" },
+  { icon: House, ariaLabel: "Dashboard", href: "/dashboard" },
   { icon: Globe, ariaLabel: "Market Intelligence", href: "/market-intelligence" },
   { icon: Gem, ariaLabel: "Vault", href: "/vault" },
-  { icon: FlaskConical, ariaLabel: "Outreach Lab", href: "#" },
+  { icon: FlaskConical, ariaLabel: "Outreach Lab", href: "/outreach-lab" },
   { icon: BarChart3, ariaLabel: "Competitor Spy", href: "/competitors" },
   { icon: Settings, ariaLabel: "Settings", href: "/settings" },
 ]
 
 export const Sidebar = memo(function Sidebar() {
   const pathname = usePathname()
-  const { isMobile, isOpen, sidebarWidth, toggleSidebar } = useSidebarState()
+  const { isMobile, isOpen, toggleSidebar } = useSidebarState()
 
   return (
     <>
@@ -40,10 +40,9 @@ export const Sidebar = memo(function Sidebar() {
         />
       )}
       <aside
-        style={{ width: `${sidebarWidth}px` }}
         className={cn(
-          "fixed left-0 top-0 h-screen py-4 bg-sidebar/90 max-md:bg-sidebar border-r border-border/70 z-[100] will-change-[width,transform] [transform:translateZ(0)] transition-[width] duration-300 ease-in-out overflow-hidden",
-          !isOpen ? "pointer-events-none border-transparent" : "pointer-events-auto"
+          "fixed left-0 top-0 h-screen w-[72px] py-4 bg-sidebar/90 max-md:bg-sidebar border-r border-border/70 z-[100] will-change-transform transform-gpu transition-transform duration-200 ease-out overflow-hidden flex flex-col",
+          isOpen ? "translate-x-0 pointer-events-auto" : "-translate-x-full pointer-events-none border-transparent"
         )}
       >
       <nav className={cn("flex-1 flex flex-col gap-2 px-2", isOpen ? "mt-12" : "mt-0 opacity-0 pointer-events-none")}>
@@ -67,11 +66,10 @@ export const Sidebar = memo(function Sidebar() {
                 "justify-center px-0",
                 pathname === item.href
                   ? "glass-panel text-primary"
-                  : "text-muted-foreground hover:text-foreground hover:bg-secondary/70",
-                item.href === "#" && "pointer-events-none opacity-60"
+                  : "text-sidebar-foreground hover:text-foreground hover:bg-sidebar-accent"
               )}
             >
-              <item.icon className="w-5 h-5 shrink-0" />
+              <item.icon className="w-5 h-5 shrink-0 text-current opacity-100" />
             </Link>
           </motion.div>
         ))}

@@ -2,8 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react"
 import { AnimatePresence, motion } from "framer-motion"
-import { Sidebar } from "@/components/dashboard/sidebar"
-import { Header } from "@/components/dashboard/header"
+import { LazyHeader, LazySidebar } from "@/components/dashboard/lazy-shell"
 import type { Product, SavedProduct } from "@/types/database"
 import { Check, Loader2 } from "lucide-react"
 import { AreaChart, Area, CartesianGrid, ResponsiveContainer, XAxis, YAxis, Tooltip, BarChart, Bar } from "recharts"
@@ -186,8 +185,8 @@ export default function MarketIntelligencePage() {
 
   return (
     <div className="relative min-h-screen bg-background overflow-hidden">
-      <Sidebar />
-      <Header searchQuery={searchQuery} onSearchChange={setSearchQuery} />
+      <LazySidebar />
+      <LazyHeader searchQuery={searchQuery} onSearchChange={setSearchQuery} />
       <main className="relative z-10 pl-[var(--content-offset,0px)] pt-16 transition-[padding] duration-300 ease-in-out">
         <div className="p-4 md:p-6">
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="mb-6">
@@ -196,14 +195,14 @@ export default function MarketIntelligencePage() {
           </motion.div>
 
           <motion.section initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }} className="mb-6">
-            <div className="glass-panel rounded-xl border border-primary/20 p-4">
+            <div className="analytics-panel rounded-xl p-4">
               <div className="flex items-center justify-between mb-4">
                 <h2 className="text-lg font-semibold text-foreground">Global Demand Heatmap</h2>
                 <button onClick={() => setSelectedCountry(null)} className="px-3 py-1.5 min-h-11 rounded-lg border border-primary/30 text-xs text-primary hover:bg-primary hover:text-white transition-colors duration-200 touch-manipulation">Clear Filter</button>
               </div>
-              <div className="rounded-xl border border-primary/20 bg-slate-950/45 p-3 mb-4 transform-gpu">
+              <div className="analytics-subpanel rounded-xl p-3 mb-4 transform-gpu">
                 <svg viewBox="0 0 320 140" className="w-full h-[120px]">
-                  <path d="M15 58L38 46L60 51L74 58L80 71L96 75L109 69L125 74L132 64L144 66L158 55L170 59L176 71L189 76L205 72L220 76L236 85L249 95L261 102L273 98L290 104L302 95" stroke="rgba(244,244,245,0.14)" strokeWidth="2.5" fill="none" />
+                  <path d="M15 58L38 46L60 51L74 58L80 71L96 75L109 69L125 74L132 64L144 66L158 55L170 59L176 71L189 76L205 72L220 76L236 85L249 95L261 102L273 98L290 104L302 95" stroke="rgba(148,163,184,0.35)" strokeWidth="2.5" fill="none" />
                   {trackedCountryDots.map((dot) => {
                     const isActive = activeCountry === dot.code
                     return (
@@ -217,7 +216,7 @@ export default function MarketIntelligencePage() {
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                 {filteredTrends.map((trend) => (
-                  <motion.div key={trend.id} whileHover={isMobile ? undefined : { scale: 1.02, boxShadow: "0 14px 28px rgba(2, 6, 23, 0.35)" }} transition={{ duration: 0.2 }} onMouseEnter={isMobile ? undefined : () => setHoveredCountry(trend.country_code ?? null)} onMouseLeave={isMobile ? undefined : () => setHoveredCountry(null)} onClick={() => setSelectedCountry((current) => (current === trend.country_code ? null : trend.country_code ?? null))} className={`rounded-xl border bg-slate-950/50 backdrop-blur-md p-4 cursor-pointer transform-gpu touch-manipulation ${selectedCountry === trend.country_code ? "border-primary shadow-[0_0_20px_rgba(139,92,246,0.3)]" : "border-primary/20"}`}>
+                    <motion.div key={trend.id} whileHover={isMobile ? undefined : { scale: 1.02, boxShadow: "0 14px 28px rgba(2, 6, 23, 0.35)" }} transition={{ duration: 0.2 }} onMouseEnter={isMobile ? undefined : () => setHoveredCountry(trend.country_code ?? null)} onMouseLeave={isMobile ? undefined : () => setHoveredCountry(null)} onClick={() => setSelectedCountry((current) => (current === trend.country_code ? null : trend.country_code ?? null))} className={`analytics-subpanel rounded-xl p-4 cursor-pointer transform-gpu touch-manipulation ${selectedCountry === trend.country_code ? "border-primary shadow-[0_0_20px_rgba(139,92,246,0.3)]" : ""}`}>
                     <div className="flex items-center justify-between mb-3">
                       <p className="text-sm font-semibold text-foreground">{trend.country_code}</p>
                       <motion.span className={`w-2.5 h-2.5 rounded-full ${pulseClassByIntensity(trend.intensity_level)}`} animate={{ scale: [1, 1.3, 1], opacity: [0.45, 1, 0.45] }} transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }} />
@@ -233,7 +232,7 @@ export default function MarketIntelligencePage() {
 
           <AnimatePresence mode="wait">
             <motion.section key={selectedCountry ?? "GLOBAL"} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.2 }} className="grid grid-cols-1 xl:grid-cols-2 gap-4 mb-6">
-              <div className="glass-panel rounded-xl border border-primary/20 p-4">
+              <div className="analytics-panel rounded-xl p-4">
                 <h2 className="text-lg font-semibold text-foreground mb-4">Market Win-Rate Trend (30 Days)</h2>
                 <div className="h-[280px]">
                   <ResponsiveContainer width="100%" height="100%">
@@ -248,7 +247,7 @@ export default function MarketIntelligencePage() {
                   </ResponsiveContainer>
                 </div>
               </div>
-              <div className="glass-panel rounded-xl border border-primary/20 p-4">
+              <div className="analytics-panel rounded-xl p-4">
                 <h2 className="text-lg font-semibold text-foreground mb-4">Category Saturation Index</h2>
                 <div className="h-[280px]">
                   <ResponsiveContainer width="100%" height="100%">
@@ -267,7 +266,7 @@ export default function MarketIntelligencePage() {
           </AnimatePresence>
 
           <motion.section initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }} className="mb-6">
-            <div className="glass-panel rounded-xl border border-primary/20 p-4">
+            <div className="analytics-panel rounded-xl p-4">
               <h2 className="text-lg font-semibold text-foreground mb-4">Competitor Live Spying</h2>
               <div className="flex gap-3 overflow-x-auto pb-2">
                 {competitorFeed.map((item) => {
@@ -275,7 +274,7 @@ export default function MarketIntelligencePage() {
                   const detectedProduct = (item.metadata as { detected_product?: string } | null)?.detected_product ?? "Unknown Product"
                   const spend = (item.metadata as { ad_spend_est?: string } | null)?.ad_spend_est ?? "N/A"
                   return (
-                    <motion.div key={item.id} whileHover={isMobile ? undefined : { scale: 1.02, boxShadow: "0 14px 28px rgba(2, 6, 23, 0.35)" }} transition={{ duration: 0.2 }} className="min-w-[280px] rounded-xl border border-primary/20 bg-slate-950/50 backdrop-blur-md px-4 py-3 transform-gpu">
+                    <motion.div key={item.id} whileHover={isMobile ? undefined : { scale: 1.02, boxShadow: "0 14px 28px rgba(2, 6, 23, 0.35)" }} transition={{ duration: 0.2 }} className="analytics-subpanel min-w-[280px] rounded-xl px-4 py-3 transform-gpu">
                       <div className="flex items-center gap-2 mb-2">
                         <motion.span className="w-2 h-2 rounded-full bg-rose-400" animate={{ scale: [1, 1.3, 1], opacity: [0.45, 1, 0.45] }} transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }} />
                         <span className="text-[11px] uppercase tracking-wide text-rose-300 font-semibold">Live</span>
@@ -291,7 +290,7 @@ export default function MarketIntelligencePage() {
           </motion.section>
 
           <motion.section initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4 }}>
-            <div className="glass-panel rounded-xl border border-primary/20 p-4 overflow-x-auto">
+            <div className="analytics-panel rounded-xl p-4 overflow-x-auto">
               <h2 className="text-lg font-semibold text-foreground mb-4">Opportunity Deep-Dive Table</h2>
               <table className="w-full min-w-[900px] text-sm">
                 <thead><tr className="text-left text-muted-foreground border-b border-border"><th className="py-3 pr-3">Product Name</th><th className="py-3 pr-3">Category</th><th className="py-3 pr-3">Avg. Cost</th><th className="py-3 pr-3">Avg. SRP</th><th className="py-3 pr-3">Predicted Profit</th><th className="py-3 pr-3">Saturation Score</th><th className="py-3 pr-3">Actions</th></tr></thead>

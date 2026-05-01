@@ -8,14 +8,11 @@ import { Eye, EyeOff, Loader2, Mail } from "lucide-react"
 import { toast } from "sonner"
 import { useSignUp } from "@clerk/nextjs/legacy"
 import { clearClientSessionData } from "@/hooks/use-ai-credits"
-import { SIGNUP_CREDITS, syncClerkUserToSupabase } from "@/lib/auth/supabase-user-sync"
+import { SIGNUP_CREDITS, syncClerkUserToSupabase } from "../../lib/auth/supabase-user-sync"
 
 export default function SignupPage() {
   const router = useRouter()
   const { isLoaded, signUp, setActive } = useSignUp()
-  const [username, setUsername] = useState<string>("")
-  const [fullName, setFullName] = useState("")
-  const [birthDate, setBirthDate] = useState("")
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
   const [verificationCode, setVerificationCode] = useState("")
@@ -23,7 +20,7 @@ export default function SignupPage() {
   const [showPassword, setShowPassword] = useState(false)
   const [loading, setLoading] = useState(false)
   const [authError, setAuthError] = useState<string | null>(null)
-  const [focused, setFocused] = useState<"username" | "email" | "password" | "birthDate" | null>(null)
+  const [focused, setFocused] = useState<"email" | "password" | null>(null)
 
   const passwordTooShort = useMemo(() => password.length > 0 && password.length < 8, [password])
 
@@ -31,14 +28,6 @@ export default function SignupPage() {
     event.preventDefault()
     if (!isLoaded || !signUp) return
     setAuthError(null)
-    if (!username.trim()) {
-      setAuthError("Username is required.")
-      return toast.error("Username is required.")
-    }
-    if (!birthDate) {
-      setAuthError("Date of birth is required.")
-      return toast.error("Date of birth is required.")
-    }
     if (passwordTooShort) {
       setAuthError("Password must be at least 8 characters.")
       return toast.error("Password must be at least 8 characters.")
@@ -48,11 +37,6 @@ export default function SignupPage() {
       await signUp.create({
         emailAddress: email.trim(),
         password,
-        username: username.trim(),
-        unsafeMetadata: {
-          fullName: fullName.trim() || null,
-          birthDate: birthDate || null,
-        },
       })
       await signUp.prepareEmailAddressVerification({ strategy: "email_code" })
       setPendingVerification(true)
@@ -89,15 +73,13 @@ export default function SignupPage() {
       const syncedCredits = await syncClerkUserToSupabase({
         clerkUserId: createdUserId,
         email,
-        username,
-        fullName,
-        birthDate,
       })
       if (attempt.createdSessionId) {
         await setActive?.({ session: attempt.createdSessionId })
       }
       clearClientSessionData()
       toast.success(`Account ready with ${syncedCredits} credits.`)
+      router.push("/market-intelligence")
       router.refresh()
     } catch (error) {
       const clerkMessage = (error as { errors?: { message?: string }[] } | undefined)?.errors?.[0]?.message
@@ -122,13 +104,6 @@ export default function SignupPage() {
         {authError && (
           <p className="rounded-xl border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-200">{authError}</p>
         )}
-        <motion.div animate={focused === "username" ? { boxShadow: "0 0 0 1px rgba(139,92,246,0.6), 0 0 18px rgba(139,92,246,0.25)" } : { boxShadow: "none" }} className="rounded-xl">
-          <input value={username} onChange={(e) => setUsername(e.target.value)} onFocus={() => setFocused("username")} onBlur={() => setFocused(null)} type="text" placeholder="Username (required)" className="w-full h-11 rounded-xl bg-black/30 border border-primary/20 px-3 text-sm text-foreground" />
-        </motion.div>
-        <input value={fullName} onChange={(e) => setFullName(e.target.value)} type="text" placeholder="Full name (optional)" className="w-full h-11 rounded-xl bg-black/30 border border-primary/20 px-3 text-sm text-foreground" />
-        <motion.div animate={focused === "birthDate" ? { boxShadow: "0 0 0 1px rgba(139,92,246,0.6), 0 0 18px rgba(139,92,246,0.25)" } : { boxShadow: "none" }} className="rounded-xl">
-          <input value={birthDate} onChange={(e) => setBirthDate(e.target.value)} onFocus={() => setFocused("birthDate")} onBlur={() => setFocused(null)} type="date" className="w-full h-11 rounded-xl bg-black/30 border border-primary/20 px-3 text-sm text-foreground" />
-        </motion.div>
         <motion.div animate={focused === "email" ? { boxShadow: "0 0 0 1px rgba(139,92,246,0.6), 0 0 18px rgba(139,92,246,0.25)" } : { boxShadow: "none" }} className="rounded-xl">
           <div className="relative">
             <Mail className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
@@ -146,6 +121,7 @@ export default function SignupPage() {
                   </button>
                 </div>
               </motion.div>
+              <div id="clerk-captcha" />
               <button disabled={loading} className="w-full h-11 rounded-xl bg-primary text-white font-medium disabled:opacity-70 inline-flex items-center justify-center gap-2">
                 {loading && <Loader2 className="w-4 h-4 animate-spin" />}
                 {loading ? "Creating account..." : "Create Account"}

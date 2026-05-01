@@ -2,11 +2,7 @@
 
 import { motion } from "framer-motion"
 import { useState } from "react"
-import { Sidebar } from "@/components/dashboard/sidebar"
-import { Header } from "@/components/dashboard/header"
-import { StatCards } from "@/components/dashboard/stat-cards"
-import { ProductGrid } from "@/components/dashboard/product-grid"
-import { ActivitySidebar } from "@/components/dashboard/activity-sidebar"
+import { LazyActivitySidebar, LazyHeader, LazyProductGrid, LazySidebar, LazyStatCards } from "@/components/dashboard/lazy-shell"
 import { Filter, SlidersHorizontal } from "lucide-react"
 
 export default function HomeDashboard() {
@@ -14,14 +10,14 @@ export default function HomeDashboard() {
 
   return (
     <div className="relative min-h-screen bg-background overflow-hidden">
-      <Sidebar />
-      <Header searchQuery={searchQuery} onSearchChange={setSearchQuery} />
+      <LazySidebar />
+      <LazyHeader searchQuery={searchQuery} onSearchChange={setSearchQuery} />
 
       <main className="relative z-10 pl-[var(--content-offset,0px)] pt-16 transition-[padding] duration-300 ease-in-out">
         <div className="flex flex-col xl:flex-row">
           <div className="flex-1 p-4 md:p-6 max-w-full xl:max-w-[calc(100%-320px)]">
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="mb-6">
-              <StatCards />
+              <LazyStatCards />
             </motion.div>
 
             <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}>
@@ -49,12 +45,12 @@ export default function HomeDashboard() {
                   </motion.button>
                 </div>
               </div>
-              <ProductGrid searchQuery={searchQuery} />
+              <LazyProductGrid searchQuery={searchQuery} />
             </motion.div>
           </div>
 
           <div className="w-full xl:w-80 p-4 md:p-6 xl:pl-0 pt-0 xl:pt-6">
-            <ActivitySidebar />
+            <LazyActivitySidebar />
           </div>
         </div>
       </main>

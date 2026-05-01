@@ -7,6 +7,7 @@ This document mirrors the live database schema and maps each table to dashboard 
 ### `profiles`
 - Purpose: user identity, subscription, and AI credit guardrail
 - Key UI usage:
+  - `id` -> same value as Clerk `user.id`
   - `plan_type`, `ai_credits_remaining`, `total_credits_used` -> plan badge and AI usage
   - `shopify_store_url` -> Shopify Sync setup
 
@@ -53,5 +54,5 @@ Before generating new analysis:
 ## RLS Constraints (Required)
 
 Users must only access their own rows for:
-- `profiles`: `id = auth.uid()`
-- `saved_products`: `user_id = auth.uid()`
+- `profiles`: `id = Clerk user id`
+- `saved_products`: `user_id = profiles.id`

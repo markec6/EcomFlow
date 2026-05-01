@@ -1,6 +1,6 @@
 export type Json = string | number | boolean | null | { [key: string]: Json | undefined } | Json[]
 
-export type PlanType = "free" | "pro" | "enterprise"
+export type PlanType = "FREE" | "PRO" | "ENTERPRISE" | "free" | "pro" | "enterprise"
 export type TrendStatus = "Trending" | "Stable" | "Saturated"
 export type IntelligenceEventType = "new_product" | "trend_spike" | "supplier_found" | "competitor_spike"
 export type SavedProductStatus = "saved" | "pushed_to_shopify" | "archived"
@@ -12,6 +12,7 @@ export interface Profile {
   full_name: string | null
   avatar_url: string | null
   public_bio: string | null
+  theme_preference: "dark" | "light" | null
   dark_mode: boolean | null
   email_alerts: boolean | null
   public_profile: boolean | null
@@ -19,15 +20,9 @@ export interface Profile {
   plan_type: PlanType
   ai_credits_remaining: number
   total_credits_used: number
+  credits?: number
   shopify_store_url: string | null
   created_at: string
-}
-
-export interface SupabaseUser {
-  id: string
-  email: string | null
-  credits: number
-  created_at?: string
 }
 
 export interface Product {
@@ -106,11 +101,6 @@ export interface Database {
         Row: Profile
         Insert: Partial<Omit<Profile, "id" | "created_at">> & { id: string }
         Update: Partial<Omit<Profile, "id">>
-      }
-      users: {
-        Row: SupabaseUser
-        Insert: Partial<Omit<SupabaseUser, "id" | "created_at">> & { id: string }
-        Update: Partial<Omit<SupabaseUser, "id">>
       }
       products: {
         Row: Product

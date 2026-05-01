@@ -26,7 +26,7 @@ interface HeaderProps {
 export const Header = memo(function Header({ searchQuery, onSearchChange }: HeaderProps) {
   const router = useRouter()
   const { signOut } = useAuth()
-  const { credits, isGuest, userEmail, profile } = useAiCredits()
+  const { credits, isReady, isGuest, userEmail, profile } = useAiCredits()
   const isMobile = useIsMobile()
   const { isOpen, toggleSidebar } = useSidebarState()
   const supabaseConfigured = Boolean(process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY)
@@ -82,7 +82,7 @@ export const Header = memo(function Header({ searchQuery, onSearchChange }: Head
   return (
     <header
       style={{ left: "var(--content-offset, 0px)" }}
-      className="fixed top-0 right-0 h-16 flex items-center gap-3 px-3 sm:px-4 md:px-6 glass max-md:bg-card/95 border-b border-border/70 z-[100] will-change-[left,transform] [transform:translateZ(0)] transition-[left] duration-300 ease-in-out"
+      className="fixed top-0 right-0 h-16 flex items-center gap-3 px-3 sm:px-4 md:px-6 glass max-md:bg-card/95 border-b border-border/70 z-[100] will-change-[left,transform] transform-gpu transition-[left] duration-200 ease-out"
     >
       <button
         type="button"
@@ -149,10 +149,15 @@ export const Header = memo(function Header({ searchQuery, onSearchChange }: Head
             Supabase Connection: {supabaseConfigured ? "Active" : "Inactive (Missing Env)"}
           </span>
         </div>
-        {!isGuest && credits > 0 ? (
+        {!isReady ? (
           <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl glass-panel border border-primary/25">
             <Zap className="w-3.5 h-3.5 text-primary" />
-            <span className="text-xs text-primary font-semibold">{credits}/1000 Credits Left</span>
+            <span className="text-xs text-primary font-semibold">Loading credits...</span>
+          </div>
+        ) : !isGuest ? (
+          <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl glass-panel border border-primary/25">
+            <Zap className="w-3.5 h-3.5 text-primary" />
+            <span className="text-xs text-primary font-semibold">{credits} Credits</span>
             {userEmail && <span className="text-[11px] text-muted-foreground">• {userEmail}</span>}
           </div>
         ) : isGuest && credits > 0 ? (
@@ -162,7 +167,7 @@ export const Header = memo(function Header({ searchQuery, onSearchChange }: Head
           </div>
         ) : (
           <button
-            onClick={() => router.push("/sign-up")}
+            onClick={() => router.push("/signup")}
             className="px-3 py-1.5 min-h-11 rounded-xl bg-gradient-to-r from-violet-600 to-purple-500 text-white text-xs font-semibold hover:opacity-95 touch-manipulation"
           >
             Sign up for 300 credits
@@ -227,7 +232,7 @@ export const Header = memo(function Header({ searchQuery, onSearchChange }: Head
             animate={isMobile ? { opacity: 1, y: 0 } : { opacity: 1, y: 0, scale: 1 }}
             exit={isMobile ? { opacity: 0, y: -4 } : { opacity: 0, y: -10, scale: 0.98 }}
             transition={{ duration: 0.12, ease: "easeOut" }}
-            className="lg:hidden absolute top-full right-2 mt-2 w-[min(22rem,calc(100vw-5rem))] rounded-2xl border border-white/10 bg-slate-950/95 p-4 shadow-[0_18px_60px_rgba(2,6,23,0.45)] will-change-transform [transform:translateZ(0)]"
+            className="lg:hidden absolute top-full right-2 mt-2 w-[min(22rem,calc(100vw-5rem))] rounded-2xl border border-white/10 bg-slate-950/95 p-4 shadow-[0_18px_60px_rgba(2,6,23,0.45)] will-change-transform transform-gpu"
           >
             <div className="flex items-center gap-3 pb-3 border-b border-white/10">
               <div className="relative w-12 h-12 rounded-full overflow-hidden border border-primary/30 bg-zinc-800">
@@ -247,13 +252,21 @@ export const Header = memo(function Header({ searchQuery, onSearchChange }: Head
                 </span>
               </div>
 
-              {!isGuest && credits > 0 ? (
+              {!isReady ? (
                 <div className="flex items-center justify-between rounded-xl border border-primary/20 px-3 py-2">
                   <span className="inline-flex items-center gap-1.5 text-xs text-primary font-semibold">
                     <Zap className="w-3.5 h-3.5" />
                     Credits
                   </span>
-                  <span className="text-xs text-foreground font-semibold">{credits}/1000</span>
+                  <span className="text-xs text-foreground font-semibold">Loading...</span>
+                </div>
+              ) : !isGuest ? (
+                <div className="flex items-center justify-between rounded-xl border border-primary/20 px-3 py-2">
+                  <span className="inline-flex items-center gap-1.5 text-xs text-primary font-semibold">
+                    <Zap className="w-3.5 h-3.5" />
+                    Credits
+                  </span>
+                  <span className="text-xs text-foreground font-semibold">{credits}</span>
                 </div>
               ) : isGuest && credits > 0 ? (
                 <div className="flex items-center justify-between rounded-xl border border-primary/20 px-3 py-2">
@@ -265,7 +278,7 @@ export const Header = memo(function Header({ searchQuery, onSearchChange }: Head
                 </div>
               ) : (
                 <button
-                  onClick={() => router.push("/sign-up")}
+                  onClick={() => router.push("/signup")}
                   className="w-full min-h-11 rounded-xl bg-gradient-to-r from-violet-600 to-purple-500 px-3 py-2 text-sm font-semibold text-white touch-manipulation"
                 >
                   Sign up for 300 credits
