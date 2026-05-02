@@ -1,6 +1,6 @@
 "use client"
 
-import { useMemo, useState } from "react"
+import { memo, useCallback, useMemo, useState } from "react"
 import { ProductCard } from "./product-card"
 import { normalizeProduct, seedProducts, setActiveProductId } from "@/lib/products-engine"
 import { getSupabaseClient } from "@/lib/supabase/client"
@@ -10,6 +10,46 @@ import { toast } from "sonner"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { spendCreditForProductScan } from "@/lib/credit-transactions"
 import { useProducts } from "@/hooks/use-products"
+
+interface ProductCardWrapperProps {
+  product: ReturnType<typeof normalizeProduct>
+  index: number
+  credits: number
+  isGuest: boolean
+  isSpendingCredit: boolean
+  onDeepAnalysis: (productId: string, productTitle: string) => void
+  onSaveToVault: (productId: string) => void
+  onCardClick: (productId: string) => void
+}
+
+const ProductCardWrapper = memo(function ProductCardWrapper({
+  product,
+  index,
+  credits,
+  isGuest,
+  isSpendingCredit,
+  onDeepAnalysis,
+  onSaveToVault,
+  onCardClick,
+}: ProductCardWrapperProps) {
+  const id = String(product.id)
+  const handleDeepAnalysis = useCallback(() => onDeepAnalysis(id, product.title), [onDeepAnalysis, id, product.title])
+  const handleSaveToVault = useCallback(() => onSaveToVault(id), [onSaveToVault, id])
+  const handleCardClick = useCallback(() => onCardClick(id), [onCardClick, id])
+
+  return (
+    <ProductCard
+      product={product}
+      index={index}
+      aiCreditsRemaining={credits}
+      onDeepAnalysis={handleDeepAnalysis}
+      onCardClick={handleCardClick}
+      onSaveToVault={handleSaveToVault}
+      isSpendingCredit={isSpendingCredit}
+      actionLabel={isGuest ? "Proceed (1 Credit)" : undefined}
+    />
+  )
+})
 
 interface ProductGridProps {
   searchQuery: string
@@ -43,7 +83,7 @@ export function ProductGrid({ searchQuery }: ProductGridProps) {
     })
   }, [products, searchQuery])
 
-  const handleDeepAnalysis = async (productId: string, productTitle: string) => {
+  const handleDeepAnalysis = useCallback(async (productId: string, productTitle: string) => {
     if (spendingProductId || isRedirecting) return
     const toastId = `credits-${productId}`
     let redirected = false
@@ -97,9 +137,10 @@ export function ProductGrid({ searchQuery }: ProductGridProps) {
         setSpendingProductId(null)
       }
     }
-  }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isGuest, activeUserId, credits, spendingProductId, isRedirecting])
 
-  const handleSaveToVault = async (productId: string) => {
+  const handleSaveToVault = useCallback(async (productId: string) => {
     const client = getSupabaseClient()
     if (!client) return
     const { error } = await client.from("saved_products").insert({ user_id: "demo-user", product_id: productId, status: "saved" })
@@ -108,7 +149,11 @@ export function ProductGrid({ searchQuery }: ProductGridProps) {
       return
     }
     toast.success("Product saved to vault.")
-  }
+  }, [])
+
+  const handleCardClick = useCallback((productId: string) => {
+    setActiveProductId(productId)
+  }, [])
 
   if (isLoading) {
     return (
@@ -123,16 +168,16 @@ export function ProductGrid({ searchQuery }: ProductGridProps) {
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
       {filteredProducts.map((product, index) => (
-        <ProductCard
+        <ProductCardWrapper
           key={product.id}
           product={product}
           index={index}
-          onDeepAnalysis={() => handleDeepAnalysis(String(product.id), product.title)}
-          aiCreditsRemaining={credits}
-          onCardClick={() => setActiveProductId(String(product.id))}
-          onSaveToVault={() => handleSaveToVault(String(product.id))}
+          credits={credits}
+          isGuest={isGuest}
           isSpendingCredit={spendingProductId === String(product.id)}
-          actionLabel={isGuest ? "Proceed (1 Credit)" : undefined}
+          onDeepAnalysis={handleDeepAnalysis}
+          onSaveToVault={handleSaveToVault}
+          onCardClick={handleCardClick}
         />
       ))}
       <Dialog open={showGuestLock} onOpenChange={setShowGuestLock}>

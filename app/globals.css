@@ -364,4 +364,15 @@ a,
     backdrop-filter: none;
     -webkit-backdrop-filter: none;
   }
+
+  /* Isolate each card's paint + layout to its own layer */
+  .glass-panel {
+    contain: layout style;
+  }
+
+  /* Avoid promoting every animated element to its own GPU layer on mobile.
+     Only the sidebar and header need compositor promotion. */
+  .will-change-transform:not(aside):not(header) {
+    will-change: auto;
+  }
 }

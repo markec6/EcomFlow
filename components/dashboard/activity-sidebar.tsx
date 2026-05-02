@@ -3,6 +3,7 @@
 import { motion } from "framer-motion"
 import { Sparkles, TrendingUp, Package, Clock, ChevronRight } from "lucide-react"
 import Image from "next/image"
+import { useIsMobile } from "@/hooks/use-mobile"
 
 const liveUpdates = [
   {
@@ -64,12 +65,14 @@ const recentOutreach = [
 ]
 
 export function ActivitySidebar() {
+  const isMobile = useIsMobile()
+
   return (
     <aside className="w-full h-full flex flex-col gap-4">
       {/* AI Live Intelligence */}
       <motion.div
-        initial={{ x: 20, opacity: 0 }}
-        animate={{ x: 0, opacity: 1 }}
+        initial={isMobile ? false : { x: 20, opacity: 0 }}
+        animate={isMobile ? undefined : { x: 0, opacity: 1 }}
         className="rounded-2xl glass-panel soft-hover p-4 flex-1"
       >
         <div className="flex items-center gap-2 mb-4">
@@ -78,8 +81,8 @@ export function ActivitySidebar() {
           </div>
           <h3 className="font-semibold text-foreground">AI Live Intelligence</h3>
           <motion.div
-            animate={{ scale: [1, 1.2, 1] }}
-            transition={{ duration: 2, repeat: Infinity }}
+            animate={isMobile ? undefined : { scale: [1, 1.2, 1] }}
+            transition={isMobile ? undefined : { duration: 2, repeat: Infinity }}
             className="ml-auto w-2 h-2 rounded-full bg-emerald-500"
           />
         </div>
@@ -88,10 +91,10 @@ export function ActivitySidebar() {
           {liveUpdates.map((update, index) => (
             <motion.div
               key={update.id}
-              initial={{ x: 20, opacity: 0 }}
-              animate={{ x: 0, opacity: 1 }}
-              transition={{ delay: 0.1 * index }}
-              whileHover={{ x: 4, scale: 1.01 }}
+              initial={isMobile ? false : { x: 20, opacity: 0 }}
+              animate={isMobile ? undefined : { x: 0, opacity: 1 }}
+              transition={isMobile ? undefined : { delay: 0.1 * index }}
+              whileHover={isMobile ? undefined : { x: 4, scale: 1.01 }}
               whileTap={{ scale: 0.99 }}
               className="p-3 rounded-xl bg-secondary/50 hover:bg-secondary transition-all duration-300 cursor-pointer group border border-transparent hover:border-primary/25"
             >
@@ -120,9 +123,9 @@ export function ActivitySidebar() {
 
       {/* Recent Outreach */}
       <motion.div
-        initial={{ x: 20, opacity: 0 }}
-        animate={{ x: 0, opacity: 1 }}
-        transition={{ delay: 0.2 }}
+        initial={isMobile ? false : { x: 20, opacity: 0 }}
+        animate={isMobile ? undefined : { x: 0, opacity: 1 }}
+        transition={isMobile ? undefined : { delay: 0.2 }}
         className="rounded-2xl glass-panel soft-hover p-4"
       >
         <div className="flex items-center justify-between mb-4">
@@ -134,10 +137,10 @@ export function ActivitySidebar() {
           {recentOutreach.map((supplier, index) => (
             <motion.div
               key={supplier.id}
-              initial={{ x: 20, opacity: 0 }}
-              animate={{ x: 0, opacity: 1 }}
-              transition={{ delay: 0.3 + 0.1 * index }}
-              whileHover={{ x: 4, scale: 1.01 }}
+              initial={isMobile ? false : { x: 20, opacity: 0 }}
+              animate={isMobile ? undefined : { x: 0, opacity: 1 }}
+              transition={isMobile ? undefined : { delay: 0.3 + 0.1 * index }}
+              whileHover={isMobile ? undefined : { x: 4, scale: 1.01 }}
               className="flex items-center gap-3 p-2 rounded-lg hover:bg-secondary/50 transition-all duration-300 cursor-pointer"
             >
               <div className="relative w-8 h-8 rounded-full overflow-hidden">

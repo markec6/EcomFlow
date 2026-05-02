@@ -467,7 +467,7 @@ export default function VaultPage() {
         )}
       </AnimatePresence>
 
-      <div className="fixed inset-0 pointer-events-none -z-0">
+      <div className="fixed inset-0 pointer-events-none -z-0 max-md:hidden">
         <motion.div
           className="absolute -top-28 left-1/4 w-[30rem] h-[30rem] rounded-full blur-[130px] bg-violet-500/20"
           animate={{ x: [0, 40, -20, 0], y: [0, -20, 25, 0] }}

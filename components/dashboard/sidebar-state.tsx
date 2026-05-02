@@ -1,6 +1,6 @@
 "use client"
 
-import { createContext, useContext, useMemo, useState } from "react"
+import { createContext, useCallback, useContext, useMemo, useState } from "react"
 import { useIsMobile } from "@/hooks/use-mobile"
 
 type SidebarStateValue = {
@@ -22,21 +22,17 @@ export function SidebarStateProvider({ children }: { children: React.ReactNode }
   const sidebarWidth = isOpen ? 72 : 0
   const contentOffset = isMobile ? 0 : isOpen ? 72 : 0
 
+  const toggleSidebar = useCallback(() => {
+    if (isMobile) {
+      setMobileOpen((prev) => !prev)
+    } else {
+      setDesktopOpen((prev) => !prev)
+    }
+  }, [isMobile])
+
   const value = useMemo<SidebarStateValue>(
-    () => ({
-      isMobile,
-      isOpen,
-      sidebarWidth,
-      contentOffset,
-      toggleSidebar: () => {
-        if (isMobile) {
-          setMobileOpen((prev) => !prev)
-          return
-        }
-        setDesktopOpen((prev) => !prev)
-      },
-    }),
-    [contentOffset, isMobile, isOpen, sidebarWidth]
+    () => ({ isMobile, isOpen, sidebarWidth, contentOffset, toggleSidebar }),
+    [contentOffset, isMobile, isOpen, sidebarWidth, toggleSidebar]
   )
 
   return (

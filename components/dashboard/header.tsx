@@ -228,7 +228,7 @@ export const Header = memo(function Header({ searchQuery, onSearchChange }: Head
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <motion.button whileHover={isMobile ? undefined : { scale: 1.05 }} className="relative touch-manipulation">
-              <div className="absolute -inset-0.5 rounded-full bg-gradient-to-r from-primary to-violet-400 animate-pulse opacity-75" />
+              <div className={`absolute -inset-0.5 rounded-full bg-gradient-to-r from-primary to-violet-400 opacity-75${isMobile ? "" : " animate-pulse"}`} />
               <div className="relative w-10 h-10 rounded-full bg-card border-2 border-background overflow-hidden">
                 {avatarNode}
               </div>

@@ -3,6 +3,7 @@
 import { motion } from "framer-motion"
 import { TrendingUp, Zap, Flame } from "lucide-react"
 import { useAiCredits } from "@/hooks/use-ai-credits"
+import { useIsMobile } from "@/hooks/use-mobile"
 import {
   AreaChart,
   Area,
@@ -22,6 +23,7 @@ const sparklineData = [
 
 export function StatCards() {
   const { credits, maxCredits } = useAiCredits()
+  const isMobile = useIsMobile()
   const usedPct = Math.round(((maxCredits - credits) / maxCredits) * 100)
 
   return (
@@ -31,7 +33,7 @@ export function StatCards() {
         initial={{ y: 20, opacity: 0 }}
         animate={{ y: 0, opacity: 1 }}
         transition={{ delay: 0.1 }}
-        whileHover={{ scale: 1.02, boxShadow: "0 14px 28px rgba(2, 6, 23, 0.35)" }}
+        whileHover={isMobile ? undefined : { scale: 1.02, boxShadow: "0 14px 28px rgba(2, 6, 23, 0.35)" }}
         whileTap={{ scale: 0.995 }}
         className="relative p-5 rounded-xl glass-panel border border-primary/20 overflow-hidden group"
       >
@@ -74,7 +76,7 @@ export function StatCards() {
         initial={{ y: 20, opacity: 0 }}
         animate={{ y: 0, opacity: 1 }}
         transition={{ delay: 0.2 }}
-        whileHover={{ scale: 1.02, boxShadow: "0 14px 28px rgba(2, 6, 23, 0.35)" }}
+        whileHover={isMobile ? undefined : { scale: 1.02, boxShadow: "0 14px 28px rgba(2, 6, 23, 0.35)" }}
         whileTap={{ scale: 0.995 }}
         className="relative p-5 rounded-xl glass-panel border border-primary/20 overflow-hidden group"
       >
@@ -106,7 +108,7 @@ export function StatCards() {
         initial={{ y: 20, opacity: 0 }}
         animate={{ y: 0, opacity: 1 }}
         transition={{ delay: 0.3 }}
-        whileHover={{ scale: 1.02, boxShadow: "0 14px 28px rgba(2, 6, 23, 0.35)" }}
+        whileHover={isMobile ? undefined : { scale: 1.02, boxShadow: "0 14px 28px rgba(2, 6, 23, 0.35)" }}
         whileTap={{ scale: 0.995 }}
         className="relative p-5 rounded-xl glass-panel border border-primary/20 overflow-hidden group"
       >
@@ -115,8 +117,8 @@ export function StatCards() {
             <Flame className="w-5 h-5 text-orange-500" />
           </div>
           <motion.span
-            animate={{ opacity: [1, 0.5, 1] }}
-            transition={{ duration: 1.5, repeat: Infinity }}
+            animate={isMobile ? undefined : { opacity: [1, 0.5, 1] }}
+            transition={isMobile ? undefined : { duration: 1.5, repeat: Infinity }}
             className="px-2 py-0.5 text-xs font-bold rounded-full bg-orange-500/20 text-orange-500"
           >
             HOT
