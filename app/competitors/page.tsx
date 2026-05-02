@@ -116,10 +116,6 @@ export default function CompetitorsPage() {
     if (scanningRows[rowId] || isRedirecting) return
     setScanningRows((current) => ({ ...current, [rowId]: true }))
     const client = getSupabaseClient()
-    if (!client) {
-      setScanningRows((current) => ({ ...current, [rowId]: false }))
-      return
-    }
     if (!activeUserId) {
       const creditSpent = await decrementCredit()
       if (!creditSpent) {
@@ -150,7 +146,7 @@ export default function CompetitorsPage() {
       return
     }
 
-    await setCredits(result.remainingCredits)
+    void setCredits(result.remainingCredits)
     toast.success("Analyzing product... 1 credit used.")
     if (selectedProductId) {
       setIsRedirecting(true)

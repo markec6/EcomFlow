@@ -10,6 +10,11 @@ const PROFILE_EVENT = "ecomflow-profile-sync"
 const MAX_CREDITS = 1000
 const GUEST_DEFAULT_CREDITS = 3
 const GUEST_CREDIT_KEY = "guest_credits"
+const LAST_CREDIT_KEY = "ecomflow_last_credits"
+
+type CreditSyncDetail = {
+  credits?: number
+}
 
 type ProfileSummary = {
   fullName: string | null
@@ -19,6 +24,7 @@ type ProfileSummary = {
 
 export function clearClientSessionData() {
   window.localStorage.removeItem(GUEST_CREDIT_KEY)
+  window.localStorage.removeItem(LAST_CREDIT_KEY)
   window.localStorage.removeItem("ecomflow_active_product_id")
   window.sessionStorage.removeItem(GUEST_CREDIT_KEY)
   window.dispatchEvent(new Event(CREDIT_EVENT))
@@ -28,19 +34,32 @@ export function clearClientSessionData() {
 export function useAiCredits() {
   const { isLoaded: authLoaded, isSignedIn, userId: clerkUserId } = useAuth()
   const { user } = useUser()
-  const [credits, setCredits] = useState(GUEST_DEFAULT_CREDITS)
-  const [isReady, setIsReady] = useState(false)
+  const [credits, setCredits] = useState(() => {
+    if (typeof window === "undefined") return GUEST_DEFAULT_CREDITS
+    const cached = Number(window.localStorage.getItem(LAST_CREDIT_KEY))
+    return Number.isFinite(cached) ? cached : GUEST_DEFAULT_CREDITS
+  })
+  const [isReady, setIsReady] = useState(true)
   const [isGuest, setIsGuest] = useState(true)
   const [userId, setUserId] = useState<string | null>(null)
   const [userEmail, setUserEmail] = useState<string | null>(null)
   const [profile, setProfile] = useState<ProfileSummary>({ fullName: null, username: null, avatarUrl: null })
-  const creditsRef = useRef(GUEST_DEFAULT_CREDITS)
+  const creditsRef = useRef(credits)
   const guestCreditsRef = useRef(GUEST_DEFAULT_CREDITS)
   const guestCreditsInitialized = useRef(false)
 
   const commitCredits = (next: number) => {
     creditsRef.current = next
     setCredits(next)
+    try {
+      window.localStorage.setItem(LAST_CREDIT_KEY, String(next))
+    } catch {
+      // Ignore storage write failures in private browsing modes.
+    }
+  }
+
+  const broadcastCredits = (next: number) => {
+    window.dispatchEvent(new CustomEvent<CreditSyncDetail>(CREDIT_EVENT, { detail: { credits: next } }))
   }
 
   const getGuestCredits = () => {
@@ -71,7 +90,6 @@ export function useAiCredits() {
     const client = getSupabaseClient()
     const emailAddress = user?.primaryEmailAddress?.emailAddress ?? null
     if (!authLoaded) {
-      setIsReady(false)
       return
     }
 
@@ -96,7 +114,6 @@ export function useAiCredits() {
     }
 
     setIsGuest(false)
-    setIsReady(false)
     setUserId(null)
     setUserEmail(emailAddress)
 
@@ -126,7 +143,12 @@ export function useAiCredits() {
 
   useEffect(() => {
     void syncCreditsFromSession()
-    const syncListener = () => {
+    const syncListener = (event: Event) => {
+      const nextCredits = (event as CustomEvent<CreditSyncDetail>).detail?.credits
+      if (typeof nextCredits === "number" && Number.isFinite(nextCredits)) {
+        commitCredits(nextCredits)
+        setIsReady(true)
+      }
       void syncCreditsFromSession()
     }
     window.addEventListener(CREDIT_EVENT, syncListener, { passive: true })
@@ -141,6 +163,7 @@ export function useAiCredits() {
     const nextValue = typeof next === "function" ? next(creditsRef.current) : next
     const normalized = Math.max(0, Math.min(MAX_CREDITS, Math.round(nextValue)))
     commitCredits(normalized)
+    broadcastCredits(normalized)
     if (isGuest) {
       const nextGuestCredits = Math.min(GUEST_DEFAULT_CREDITS, normalized)
       guestCreditsRef.current = nextGuestCredits
@@ -159,7 +182,6 @@ export function useAiCredits() {
           .eq("id", userId)
       }
     }
-    window.dispatchEvent(new Event(CREDIT_EVENT))
   }
 
   return {

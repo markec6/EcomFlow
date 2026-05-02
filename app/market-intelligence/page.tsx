@@ -146,10 +146,6 @@ export default function MarketIntelligencePage() {
       return
     }
     const client = getSupabaseClient()
-    if (!client) {
-      setScanningProducts((current) => ({ ...current, [productId]: false }))
-      return
-    }
 
     if (!activeUserId) {
       const creditSpent = await decrementCredit()
@@ -177,7 +173,7 @@ export default function MarketIntelligencePage() {
       return
     }
 
-    await setCredits(result.remainingCredits)
+    void setCredits(result.remainingCredits)
     toast.success("Analyzing product... 1 credit used.")
     setIsRedirecting(true)
     window.location.href = `/products/${productId}`

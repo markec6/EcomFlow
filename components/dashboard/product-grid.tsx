@@ -2,13 +2,14 @@
 
 import { useEffect, useMemo, useState } from "react"
 import { ProductCard } from "./product-card"
-import { fetchProductsFromSupabase, normalizeProduct, setActiveProductId } from "@/lib/products-engine"
+import { fetchProductsFromSupabase, normalizeProduct, seedProducts, setActiveProductId } from "@/lib/products-engine"
 import { getSupabaseClient } from "@/lib/supabase/client"
 import { useRouter } from "next/navigation"
 import { useAiCredits } from "@/hooks/use-ai-credits"
 import { toast } from "sonner"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Zap } from "lucide-react"
+import { spendCreditForProductScan } from "@/lib/credit-transactions"
 
 interface ProductGridProps {
   searchQuery: string
@@ -16,13 +17,13 @@ interface ProductGridProps {
 
 export function ProductGrid({ searchQuery }: ProductGridProps) {
   const router = useRouter()
-  const [products, setProducts] = useState<ReturnType<typeof normalizeProduct>[]>([])
-  const [isLoading, setIsLoading] = useState(true)
+  const [products, setProducts] = useState<ReturnType<typeof normalizeProduct>[]>(() => seedProducts.map(normalizeProduct))
+  const [isLoading, setIsLoading] = useState(false)
   const [spendingProductId, setSpendingProductId] = useState<string | null>(null)
   const [isRedirecting, setIsRedirecting] = useState(false)
   const [showBuyMore, setShowBuyMore] = useState(false)
   const [showGuestLock, setShowGuestLock] = useState(false)
-  const { credits, decrementCredit, isGuest } = useAiCredits()
+  const { credits, decrementCredit, isGuest, userId: activeUserId, setCredits } = useAiCredits()
 
   useEffect(() => {
     let mounted = true
@@ -50,18 +51,15 @@ export function ProductGrid({ searchQuery }: ProductGridProps) {
 
   const handleDeepAnalysis = async (productId: string, productTitle: string) => {
     if (spendingProductId || isRedirecting) return
-    const creditSpent = await decrementCredit()
-    if (!creditSpent) {
-      if (isGuest) {
-        setShowGuestLock(true)
-        return
-      }
-      setShowBuyMore(true)
-      return
-    }
     setSpendingProductId(productId)
     toast.loading("Spending 1 Credit...", { id: `credits-${productId}` })
     if (isGuest) {
+      const creditSpent = await decrementCredit()
+      if (!creditSpent) {
+        setSpendingProductId(null)
+        setShowGuestLock(true)
+        return
+      }
       window.setTimeout(() => {
         toast.success(`Guest scan used for ${productTitle}`, { id: `credits-${productId}` })
         setActiveProductId(productId)
@@ -69,14 +67,30 @@ export function ProductGrid({ searchQuery }: ProductGridProps) {
       }, 500)
       return
     }
-    await new Promise<void>((resolve) => {
-      window.setTimeout(() => {
-        resolve()
-      }, 900)
-    })
+
+    const client = getSupabaseClient()
+    if (!activeUserId) {
+      setSpendingProductId(null)
+      setShowBuyMore(true)
+      toast.dismiss(`credits-${productId}`)
+      return
+    }
+
+    const result = await spendCreditForProductScan(client, activeUserId, productId)
+    if (!result.ok) {
+      setSpendingProductId(null)
+      if (result.reason === "insufficient_credits") {
+        setShowBuyMore(true)
+      } else {
+        toast.error("Could not spend credit. Please try again.", { id: `credits-${productId}` })
+      }
+      return
+    }
+
+    void setCredits(result.remainingCredits)
     setIsRedirecting(true)
     setActiveProductId(productId)
-    toast.success(`Deep Analysis started for ${productTitle}`, { id: `credits-${productId}` })
+    toast.success(`Analyzing ${productTitle}... 1 credit used.`, { id: `credits-${productId}` })
     router.push(`/products/${productId}`)
     window.setTimeout(() => {
       setSpendingProductId(null)

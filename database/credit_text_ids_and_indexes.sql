@@ -1,3 +1,28 @@
+alter table public.profiles
+  alter column id type text using id::text;
+
+alter table public.credit_spend_events
+  alter column user_id type text using user_id::text,
+  alter column product_id type text using product_id::text;
+
+alter table public.credit_spend_events
+  drop constraint if exists credit_spend_events_user_id_fkey,
+  drop constraint if exists credit_spend_events_product_id_fkey;
+
+create index if not exists profiles_id_idx
+  on public.profiles (id);
+
+create index if not exists products_id_idx
+  on public.products (id);
+
+create index if not exists credit_spend_events_user_id_idx
+  on public.credit_spend_events (user_id);
+
+create index if not exists credit_spend_events_product_id_idx
+  on public.credit_spend_events (product_id);
+
+drop function if exists public.spend_credit_for_scan(uuid, uuid, text);
+
 create or replace function public.spend_credit_for_scan(
   p_user_id text,
   p_product_id text,
@@ -44,3 +69,5 @@ begin
   return query select true, 'ok', v_remaining;
 end;
 $$;
+
+notify pgrst, 'reload schema';

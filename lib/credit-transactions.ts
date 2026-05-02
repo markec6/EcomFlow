@@ -10,24 +10,27 @@ type SpendCreditResult =
   | { ok: false; reason: "duplicate" | "insufficient_credits" | "profile_missing" | "insert_failed" | "update_failed" | "rpc_failed" }
 
 export async function spendCreditForProductScan(
-  client: SupabaseClient<Database>,
+  _client: SupabaseClient<Database> | null,
   userId: string,
   productId: string,
   actionType: ScanActionType = "deep_scan"
 ): Promise<SpendCreditResult> {
-  const { data, error } = await client.rpc("spend_credit_for_scan", {
-    p_user_id: userId,
-    p_product_id: productId,
-    p_action_type: actionType,
+  const response = await fetch("/api/credits/spend", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ userId, productId, actionType }),
   })
 
-  if (error) {
+  const result = (await response.json().catch(() => null)) as
+    | { ok?: boolean; remainingCredits?: number; reason?: string }
+    | null
+
+  if (!response.ok || !result) {
     return { ok: false, reason: "rpc_failed" }
   }
 
-  const first = Array.isArray(data) ? data[0] : null
-  if (!first?.ok) {
-    const rawReason = String(first?.reason ?? "rpc_failed")
+  if (!result.ok) {
+    const rawReason = String(result.reason ?? "rpc_failed")
     const reason: SpendCreditResult extends { ok: false; reason: infer R } ? R : never =
       rawReason === "duplicate" ||
       rawReason === "insufficient_credits" ||
@@ -39,5 +42,5 @@ export async function spendCreditForProductScan(
     return { ok: false, reason }
   }
 
-  return { ok: true, remainingCredits: Number(first.remaining_credits ?? 0) }
+  return { ok: true, remainingCredits: Number(result.remainingCredits ?? 0) }
 }

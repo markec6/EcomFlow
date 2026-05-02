@@ -1,7 +1,7 @@
 create table if not exists credit_spend_events (
   id uuid primary key default gen_random_uuid(),
-  user_id uuid not null references auth.users(id) on delete cascade,
-  product_id uuid not null references products(id) on delete cascade,
+  user_id text not null,
+  product_id text not null,
   action_type text not null default 'deep_scan',
   created_at timestamptz not null default timezone('utc', now()),
   dedupe_bucket bigint generated always as (floor(extract(epoch from created_at) / 10)) stored
