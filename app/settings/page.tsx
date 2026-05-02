@@ -131,29 +131,17 @@ export default function SettingsPage() {
     }
   }, [profile.avatarUrl, uploadedAvatarUrl])
 
-  const validateFile = (file: File) => {
-    const maxBytes = 10 * 1024 * 1024
-    const allowed = ["image/png", "image/jpeg", "image/webp"]
-    if (!allowed.includes(file.type)) {
-      toast.error("Invalid file type - use PNG, JPG, JPEG, or WEBP.")
-      return false
-    }
-    if (file.size > maxBytes) {
-      toast.error("Slika je prevelika! Maksimalna veličina je 10MB.")
-      return false
-    }
-    return true
-  }
-
   const onFileChange = (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0]
     if (!file) return
-    if (!validateFile(file)) {
+    if (file.size > 10 * 1024 * 1024) {
+      toast.error("Slika je prevelika! Maksimalna veličina je 10MB.")
       event.target.value = ""
       setSelectedFile(null)
       setPreviewUrl(null)
       return
     }
+    // STEP A: File selected — show preview immediately
     setSelectedFile(file)
     setPreviewUrl(URL.createObjectURL(file))
   }
@@ -165,42 +153,43 @@ export default function SettingsPage() {
       toast.error("Choose an image first.")
       return
     }
-    if (!validateFile(file)) return
+    if (!clerkUserId) {
+      toast.error("Please log in to update your profile picture.")
+      return
+    }
 
     setUploading(true)
     try {
-      if (!clerkUserId) {
-        toast.error("Please log in to update your profile picture.")
-        return
-      }
-
+      // STEP B: Send file to server for Supabase Storage upload
+      console.log("[AVATAR UPLOAD] STEP B: Sending file to /api/profile/avatar")
       const body = new FormData()
       body.append("file", file)
-      const response = await fetch("/api/profile/avatar", {
-        method: "POST",
-        body,
-      })
+      const response = await fetch("/api/profile/avatar", { method: "POST", body })
       const result = (await response.json()) as { ok?: boolean; avatarUrl?: string; error?: string }
 
       if (!response.ok || !result.ok || !result.avatarUrl) {
-        throw new Error(result.error ?? "Failed to save avatar URL to profile")
+        console.log("[AVATAR UPLOAD] STEP B FAILED: Server responded with:", result.error ?? response.status)
+        toast.error("Greška pri prenosu slike na server. Pogledaj konzolu za detalje.")
+        return
       }
+      console.log("[AVATAR UPLOAD] STEP B OK: File uploaded, public URL:", result.avatarUrl)
 
+      // STEP C: Database already updated by API — reflect URL locally
+      console.log("[AVATAR UPLOAD] STEP C OK: Database sync confirmed by server.")
       setCurrentAvatarUrl(result.avatarUrl)
       setUploadedAvatarUrl(result.avatarUrl)
       setSelectedFile(null)
       setPreviewUrl(null)
       if (fileInputRef.current) fileInputRef.current.value = ""
+
+      // STEP D: Push new avatar to header without full reload
+      console.log("[AVATAR UPLOAD] STEP D: Dispatching profile sync event to update header.")
       window.dispatchEvent(new CustomEvent(PROFILE_EVENT, { detail: { avatarUrl: result.avatarUrl } }))
       router.refresh()
       toast.success("Profile picture updated.")
     } catch (error) {
-      if (error instanceof Error && error.message.includes("profile")) {
-        toast.error("Greška pri čuvanju linka slike u bazi.")
-      } else {
-        console.error("Upload Error:", error)
-        toast.error("Greška pri prenosu slike na server.")
-      }
+      console.log("[AVATAR UPLOAD] UNEXPECTED ERROR:", error)
+      toast.error("Greška pri prenosu slike na server. Pogledaj konzolu za detalje.")
     } finally {
       setUploading(false)
     }
@@ -397,7 +386,7 @@ export default function SettingsPage() {
                   <input
                     ref={fileInputRef}
                     type="file"
-                    accept=".png,.jpg,.jpeg,.webp,image/png,image/jpeg,image/webp"
+                    accept="image/*"
                     onChange={onFileChange}
                     className="w-full rounded-xl border border-white/10 bg-black/30 p-2 text-sm text-foreground focus:outline-none focus:border-primary/60 focus:ring-2 focus:ring-primary/20"
                   />
