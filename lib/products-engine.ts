@@ -301,6 +301,59 @@ export async function fetchProductsFromSupabase(options: FetchProductsOptions = 
   })) as ProductRecord[]
 }
 
+type FetchProductByIdOptions = {
+  includeCompetitors?: boolean
+  includeAiCopyVariations?: boolean
+}
+
+export async function fetchProductByIdFromSupabase(productId: string, options: FetchProductByIdOptions = {}) {
+  const { includeCompetitors = false, includeAiCopyVariations = true } = options
+  const client = getSupabaseClient()
+
+  if (!client) {
+    const fallback = seedProducts.find((product) => product.id === productId) ?? null
+    if (!fallback) return null
+    return {
+      ...fallback,
+      competitors: includeCompetitors ? fallback.competitors : [],
+      ai_copy_variations: includeAiCopyVariations ? fallback.ai_copy_variations : { emotional_hook: "", professional_direct: "" },
+    }
+  }
+
+  const selectedColumns = [
+    ...BASE_PRODUCT_COLUMNS,
+    ...(includeCompetitors ? ["competitors"] : []),
+    ...(includeAiCopyVariations ? ["ai_copy_variations"] : []),
+  ].join(",")
+
+  const query = client
+    .from("products")
+    .select(selectedColumns)
+    .eq("id", productId)
+    .maybeSingle()
+
+  const { data, error } = await (query as PromiseLike<{ data: Record<string, unknown> | null; error: unknown }>)
+  if (error || !data) {
+    const fallback = seedProducts.find((product) => product.id === productId) ?? null
+    if (!fallback) return null
+    return {
+      ...fallback,
+      competitors: includeCompetitors ? fallback.competitors : [],
+      ai_copy_variations: includeAiCopyVariations ? fallback.ai_copy_variations : { emotional_hook: "", professional_direct: "" },
+    }
+  }
+
+  return {
+    ...data,
+    competitors: includeCompetitors && Array.isArray(data.competitors) ? (data.competitors as CompetitorProfile[]) : [],
+    ai_copy_variations:
+      includeAiCopyVariations && typeof data.ai_copy_variations === "object" && data.ai_copy_variations
+        ? (data.ai_copy_variations as { emotional_hook: string; professional_direct: string })
+        : { emotional_hook: "", professional_direct: "" },
+    trend_data: Array.isArray(data.trend_data) ? (data.trend_data as number[]) : [],
+  } as ProductRecord
+}
+
 export function setActiveProductId(productId: string) {
   if (typeof window === "undefined") return
   window.localStorage.setItem(ACTIVE_PRODUCT_STORAGE_KEY, productId)

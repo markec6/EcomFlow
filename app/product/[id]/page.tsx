@@ -1,59 +1,48 @@
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
+import { useMemo, useState } from "react"
 import { useParams } from "next/navigation"
 import Image from "next/image"
+import useSWR from "swr"
 import { Sidebar } from "@/components/dashboard/sidebar"
 import { Header } from "@/components/dashboard/header"
-import { fetchProductsFromSupabase, seedProducts, type ProductRecord } from "@/lib/products-engine"
-import { getSupabaseClient } from "@/lib/supabase/client"
+import { fetchProductByIdFromSupabase, seedProducts } from "@/lib/products-engine"
 import { BarChart3, Copy, Info } from "lucide-react"
 import { toast } from "sonner"
+import { useProducts } from "@/hooks/use-products"
 
 const FALLBACK_IMAGE = "https://images.unsplash.com/photo-1511497584788-876760111969?w=1200&h=900&fit=crop"
 
 export default function ProductDetailsPage() {
   const params = useParams<{ id: string }>()
+  const productId = String(params.id ?? "")
   const [searchQuery, setSearchQuery] = useState("")
-  const [product, setProduct] = useState<ProductRecord | null>(null)
-  const [isLoading, setIsLoading] = useState(true)
   const [activeImage, setActiveImage] = useState(0)
   const [units, setUnits] = useState(100)
-
-  useEffect(() => {
-    const id = params.id
-    console.log("Fetching product with ID:", id)
-    const client = getSupabaseClient()
-    const loadFallbackProduct = async () => {
-      const rows = await fetchProductsFromSupabase()
-      const fallbackProduct = rows.find((item) => item.id === id) ?? seedProducts.find((item) => item.id === id) ?? null
-      setProduct((fallbackProduct ?? null) as ProductRecord | null)
-      setIsLoading(false)
+  const { products: cachedProducts } = useProducts({
+    limit: 24,
+    includeCompetitors: false,
+    includeAiCopyVariations: true,
+  })
+  const cachedProduct = useMemo(
+    () => cachedProducts.find((item) => item.id === productId) ?? seedProducts.find((item) => item.id === productId) ?? null,
+    [cachedProducts, productId]
+  )
+  const { data: product, isLoading } = useSWR(
+    productId ? ["product-detail", productId] : null,
+    () =>
+      fetchProductByIdFromSupabase(productId, {
+        includeCompetitors: false,
+        includeAiCopyVariations: true,
+      }),
+    {
+      fallbackData: cachedProduct,
+      revalidateOnFocus: false,
+      revalidateIfStale: false,
+      dedupingInterval: 60_000,
+      keepPreviousData: true,
     }
-
-    if (!client) {
-      console.error("Supabase product client unavailable. Check NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY.")
-      void loadFallbackProduct()
-      return
-    }
-
-    client
-      .from("products")
-      .select("id,name,category,image_url,base_cost,market_price,margin,trend_data,saturation_score,competitors,ai_copy_variations")
-      .eq("id", id)
-      .maybeSingle()
-      .then(async ({ data, error }) => {
-        if (error) {
-          console.error("Product fetch error:", error)
-        }
-        if (!data) {
-          await loadFallbackProduct()
-          return
-        }
-        setProduct((data as ProductRecord | null) ?? null)
-        setIsLoading(false)
-      })
-  }, [params.id])
+  )
 
   const gallery = useMemo(() => {
     const primary = product?.image_url ?? FALLBACK_IMAGE

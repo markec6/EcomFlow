@@ -18,13 +18,14 @@ import {
   XAxis,
   YAxis,
 } from "recharts"
-import { fetchProductsFromSupabase, getActiveProductId, seedProducts, setActiveProductId } from "@/lib/products-engine"
+import { getActiveProductId, seedProducts, setActiveProductId } from "@/lib/products-engine"
 import { getSupabaseClient } from "@/lib/supabase/client"
 import { toast } from "sonner"
 import { useRouter } from "next/navigation"
 import { useAiCredits } from "@/hooks/use-ai-credits"
 import { spendCreditForProductScan } from "@/lib/credit-transactions"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { useProducts } from "@/hooks/use-products"
 
 type Competitor = {
   id: string
@@ -43,29 +44,24 @@ export default function CompetitorsPage() {
   const router = useRouter()
   const { setCredits, decrementCredit, userId: activeUserId } = useAiCredits()
   const [searchQuery, setSearchQuery] = useState("")
-  const [products, setProducts] = useState<typeof seedProducts>([])
   const [selectedProductId, setSelectedProductId] = useState("")
   const [competitors, setCompetitors] = useState<Competitor[]>([])
   const [activeCompetitorId, setActiveCompetitorId] = useState("")
-  const [isLoadingProductData, setIsLoadingProductData] = useState(true)
   const [loadedVideoIds, setLoadedVideoIds] = useState<Record<string, boolean>>({})
   const [scanningRows, setScanningRows] = useState<Record<string, boolean>>({})
   const [isRedirecting, setIsRedirecting] = useState(false)
   const [showGuestLock, setShowGuestLock] = useState(false)
+  const { products, isLoading: isLoadingProductData } = useProducts({
+    limit: 24,
+    includeCompetitors: true,
+    includeAiCopyVariations: false,
+  })
 
   useEffect(() => {
-    let mounted = true
-    fetchProductsFromSupabase().then((rows) => {
-      if (!mounted) return
-      const activeProductId = getActiveProductId() ?? rows[0]?.id ?? seedProducts[0].id
-      setProducts(rows)
-      setSelectedProductId(activeProductId)
-      setIsLoadingProductData(false)
-    })
-    return () => {
-      mounted = false
-    }
-  }, [])
+    if (selectedProductId) return
+    const activeProductId = getActiveProductId() ?? products[0]?.id ?? seedProducts[0].id
+    setSelectedProductId(activeProductId)
+  }, [products, selectedProductId])
 
   useEffect(() => {
     const activeProduct = products.find((item) => item.id === selectedProductId) ?? products[0] ?? seedProducts[0]
@@ -190,7 +186,15 @@ export default function CompetitorsPage() {
               transition={{ duration: 0.2 }}
               className="-mx-4 px-0 md:mx-0 md:px-0 flex md:grid md:grid-cols-3 gap-0 md:gap-3 overflow-x-auto md:overflow-visible snap-x snap-mandatory"
             >
-              {competitors.map((competitor) => {
+              {isLoadingProductData ? (
+                Array.from({ length: 3 }).map((_, idx) => (
+                  <div key={`competitor-skeleton-${idx}`} className="snap-center shrink-0 w-full min-w-full md:min-w-0 md:w-auto rounded-2xl p-3 border border-primary/20 glass-panel">
+                    <div className="h-40 rounded-xl border border-primary/20 bg-slate-900/90 animate-pulse mb-3" />
+                    <div className="h-4 w-2/3 rounded bg-slate-900/90 animate-pulse" />
+                  </div>
+                ))
+              ) : (
+                competitors.map((competitor) => {
                 const selected = competitor.id === activeCompetitorId
                 return (
                   <motion.button
@@ -243,7 +247,8 @@ export default function CompetitorsPage() {
                     </div>
                   </motion.button>
                 )
-              })}
+              })
+              )}
             </motion.div>
             </AnimatePresence>
           </motion.section>
