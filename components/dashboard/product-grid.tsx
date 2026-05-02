@@ -1,15 +1,15 @@
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
+import { useMemo, useState } from "react"
 import { ProductCard } from "./product-card"
-import { fetchProductsFromSupabase, normalizeProduct, seedProducts, setActiveProductId } from "@/lib/products-engine"
+import { normalizeProduct, seedProducts, setActiveProductId } from "@/lib/products-engine"
 import { getSupabaseClient } from "@/lib/supabase/client"
 import { useRouter } from "next/navigation"
 import { useAiCredits } from "@/hooks/use-ai-credits"
 import { toast } from "sonner"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
-import { Zap } from "lucide-react"
 import { spendCreditForProductScan } from "@/lib/credit-transactions"
+import { useProducts } from "@/hooks/use-products"
 
 interface ProductGridProps {
   searchQuery: string
@@ -17,25 +17,19 @@ interface ProductGridProps {
 
 export function ProductGrid({ searchQuery }: ProductGridProps) {
   const router = useRouter()
-  const [products, setProducts] = useState<ReturnType<typeof normalizeProduct>[]>(() => seedProducts.map(normalizeProduct))
-  const [isLoading, setIsLoading] = useState(false)
   const [spendingProductId, setSpendingProductId] = useState<string | null>(null)
   const [isRedirecting, setIsRedirecting] = useState(false)
-  const [showBuyMore, setShowBuyMore] = useState(false)
   const [showGuestLock, setShowGuestLock] = useState(false)
-  const { credits, decrementCredit, isGuest, userId: activeUserId, setCredits } = useAiCredits()
-
-  useEffect(() => {
-    let mounted = true
-    fetchProductsFromSupabase().then((rows) => {
-      if (!mounted) return
-      setProducts(rows.map(normalizeProduct))
-      setIsLoading(false)
-    })
-    return () => {
-      mounted = false
-    }
-  }, [])
+  const { credits, decrementCredit, isGuest, userId: activeUserId, setCredits, refreshCredits } = useAiCredits()
+  const { products: rawProducts, isLoading } = useProducts({
+    limit: 24,
+    includeCompetitors: false,
+    includeAiCopyVariations: false,
+  })
+  const products = useMemo(
+    () => (rawProducts.length ? rawProducts : seedProducts).map(normalizeProduct),
+    [rawProducts]
+  )
 
   const filteredProducts = useMemo(() => {
     const query = searchQuery.trim().toLowerCase()
@@ -51,51 +45,58 @@ export function ProductGrid({ searchQuery }: ProductGridProps) {
 
   const handleDeepAnalysis = async (productId: string, productTitle: string) => {
     if (spendingProductId || isRedirecting) return
+    const toastId = `credits-${productId}`
+    let redirected = false
     setSpendingProductId(productId)
-    toast.loading("Spending 1 Credit...", { id: `credits-${productId}` })
-    if (isGuest) {
-      const creditSpent = await decrementCredit()
-      if (!creditSpent) {
-        setSpendingProductId(null)
-        setShowGuestLock(true)
-        return
-      }
-      window.setTimeout(() => {
-        toast.success(`Guest scan used for ${productTitle}`, { id: `credits-${productId}` })
+    toast.loading("Spending 1 Credit...", { id: toastId })
+    try {
+      if (isGuest) {
+        const creditSpent = await decrementCredit()
+        if (!creditSpent) {
+          setShowGuestLock(true)
+          toast.error("No guest credits left. Sign up to claim 300 credits.", { id: toastId })
+          return
+        }
+        toast.success(`Guest scan used for ${productTitle}`, { id: toastId })
         setActiveProductId(productId)
         router.push(`/products/${productId}`)
-      }, 500)
-      return
-    }
-
-    const client = getSupabaseClient()
-    if (!activeUserId) {
-      setSpendingProductId(null)
-      setShowBuyMore(true)
-      toast.dismiss(`credits-${productId}`)
-      return
-    }
-
-    const result = await spendCreditForProductScan(client, activeUserId, productId)
-    if (!result.ok) {
-      setSpendingProductId(null)
-      if (result.reason === "insufficient_credits") {
-        setShowBuyMore(true)
-      } else {
-        toast.error("Could not spend credit. Please try again.", { id: `credits-${productId}` })
+        return
       }
-      return
-    }
 
-    void setCredits(result.remainingCredits)
-    setIsRedirecting(true)
-    setActiveProductId(productId)
-    toast.success(`Analyzing ${productTitle}... 1 credit used.`, { id: `credits-${productId}` })
-    router.push(`/products/${productId}`)
-    window.setTimeout(() => {
-      setSpendingProductId(null)
-      setIsRedirecting(false)
-    }, 3000)
+      const client = getSupabaseClient()
+      if (!activeUserId) {
+        await refreshCredits()
+        toast.error("Session still syncing. Please try again.", { id: toastId })
+        return
+      }
+
+      const result = await spendCreditForProductScan(client, activeUserId, productId)
+      if (!result.ok) {
+        if (result.reason === "insufficient_credits") {
+          toast.error("No credits left. Top up to continue Deep Analysis.", { id: toastId })
+        } else {
+          toast.error("Could not spend credit. Please try again.", { id: toastId })
+        }
+        return
+      }
+
+      await setCredits(result.remainingCredits)
+      setIsRedirecting(true)
+      redirected = true
+      setActiveProductId(productId)
+      toast.success(`Analyzing ${productTitle}... 1 credit used.`, { id: toastId })
+      router.push(`/products/${productId}`)
+      window.setTimeout(() => {
+        setSpendingProductId(null)
+        setIsRedirecting(false)
+      }, 3000)
+    } catch {
+      toast.error("Request timed out. Please retry.", { id: toastId })
+    } finally {
+      if (!redirected) {
+        setSpendingProductId(null)
+      }
+    }
   }
 
   const handleSaveToVault = async (productId: string) => {
@@ -134,21 +135,6 @@ export function ProductGrid({ searchQuery }: ProductGridProps) {
           actionLabel={isGuest ? "Proceed (1 Credit)" : undefined}
         />
       ))}
-      <Dialog open={showBuyMore} onOpenChange={setShowBuyMore}>
-        <DialogContent className="glass-panel border border-primary/30 bg-slate-950/95">
-          <DialogHeader>
-            <DialogTitle className="text-foreground">No Credits Left</DialogTitle>
-            <DialogDescription>Top up your credits to continue Deep Analysis and unlock AI intelligence.</DialogDescription>
-          </DialogHeader>
-          <div className="rounded-xl border border-primary/20 p-3 bg-black/20 flex items-center gap-2">
-            <Zap className="w-4 h-4 text-primary" />
-            <p className="text-sm text-foreground">Current balance: {credits} credits</p>
-          </div>
-          <DialogFooter>
-            <button onClick={() => setShowBuyMore(false)} className="px-4 py-2 rounded-lg border border-primary/30 text-primary hover:bg-primary hover:text-white transition-colors">Buy More</button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
       <Dialog open={showGuestLock} onOpenChange={setShowGuestLock}>
         <DialogContent className="glass-panel border border-primary/30 bg-slate-950/95">
           <DialogHeader>

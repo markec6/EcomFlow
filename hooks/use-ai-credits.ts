@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react"
 import { useAuth, useUser } from "@clerk/nextjs"
 import { getSupabaseClient } from "@/lib/supabase/client"
-import { ensureSupabaseProfile, getWritableSupabaseClient } from "../lib/auth/supabase-user-sync"
+import { SIGNUP_CREDITS, ensureSupabaseProfile, getWritableSupabaseClient } from "../lib/auth/supabase-user-sync"
 
 const CREDIT_EVENT = "ecomflow-credits-sync"
 const PROFILE_EVENT = "ecomflow-profile-sync"
@@ -86,6 +86,18 @@ export function useAiCredits() {
     return guestCreditsRef.current
   }
 
+  const getOptimisticSignedInCredits = () => {
+    try {
+      const cached = Number(window.localStorage.getItem(LAST_CREDIT_KEY))
+      if (Number.isFinite(cached) && cached >= 0) {
+        return Math.round(cached)
+      }
+    } catch {
+      // Ignore storage read failures and fall back to signup baseline.
+    }
+    return Math.max(creditsRef.current, SIGNUP_CREDITS)
+  }
+
   const syncCreditsFromSession = async () => {
     const client = getSupabaseClient()
     const emailAddress = user?.primaryEmailAddress?.emailAddress ?? null
@@ -107,15 +119,16 @@ export function useAiCredits() {
       setIsGuest(false)
       setUserId(clerkUserId)
       setUserEmail(user?.primaryEmailAddress?.emailAddress ?? null)
-      commitCredits(0)
+      commitCredits(getOptimisticSignedInCredits())
       setProfile({ fullName: user?.fullName ?? null, username: user?.username ?? null, avatarUrl: user?.imageUrl ?? null })
       setIsReady(true)
       return
     }
 
     setIsGuest(false)
-    setUserId(null)
+    setUserId(clerkUserId)
     setUserEmail(emailAddress)
+    commitCredits(getOptimisticSignedInCredits())
 
     const syncedProfile = emailAddress
       ? await ensureSupabaseProfile({
@@ -125,7 +138,6 @@ export function useAiCredits() {
       : null
 
     if (!syncedProfile) {
-      commitCredits(0)
       setProfile({ fullName: user?.fullName ?? null, username: user?.username ?? null, avatarUrl: user?.imageUrl ?? null })
       setIsReady(true)
       return
@@ -148,6 +160,7 @@ export function useAiCredits() {
       if (typeof nextCredits === "number" && Number.isFinite(nextCredits)) {
         commitCredits(nextCredits)
         setIsReady(true)
+        return
       }
       void syncCreditsFromSession()
     }

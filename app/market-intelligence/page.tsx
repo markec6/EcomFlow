@@ -6,7 +6,6 @@ import { LazyHeader, LazySidebar } from "@/components/dashboard/lazy-shell"
 import type { Product, SavedProduct } from "@/types/database"
 import { Check, Loader2 } from "lucide-react"
 import { AreaChart, Area, CartesianGrid, ResponsiveContainer, XAxis, YAxis, Tooltip, BarChart, Bar } from "recharts"
-import { fetchProductsFromSupabase } from "@/lib/products-engine"
 import { getSupabaseClient } from "@/lib/supabase/client"
 import { useAiCredits } from "@/hooks/use-ai-credits"
 import { toast } from "sonner"
@@ -14,6 +13,7 @@ import { useRouter } from "next/navigation"
 import { spendCreditForProductScan } from "@/lib/credit-transactions"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { useIsMobile } from "@/hooks/use-mobile"
+import { useProducts } from "@/hooks/use-products"
 
 const productCountryMap: Record<string, string> = {}
 const STATIC_TS = "2026-04-28T12:00:00.000Z"
@@ -25,7 +25,6 @@ export default function MarketIntelligencePage() {
   const isMobile = useIsMobile()
   const [searchQuery, setSearchQuery] = useState("")
   const { setCredits, decrementCredit, userId: activeUserId } = useAiCredits()
-  const [products, setProducts] = useState<Product[]>([])
   const [savedProducts, setSavedProducts] = useState<SavedProduct[]>([])
   const [selectedCountry, setSelectedCountry] = useState<string | null>(null)
   const [hoveredCountry, setHoveredCountry] = useState<string | null>(null)
@@ -35,6 +34,11 @@ export default function MarketIntelligencePage() {
   const [showGuestLock, setShowGuestLock] = useState(false)
   const query = searchQuery.trim().toLowerCase()
   const activeCountry = hoveredCountry ?? selectedCountry
+  const { products, isLoading: isLoadingProducts } = useProducts({
+    limit: 24,
+    includeCompetitors: true,
+    includeAiCopyVariations: false,
+  })
 
   useEffect(() => {
     if (!recentlySavedProductId) return
@@ -43,13 +47,10 @@ export default function MarketIntelligencePage() {
   }, [recentlySavedProductId])
 
   useEffect(() => {
-    fetchProductsFromSupabase().then((rows) => {
-      setProducts(rows)
-      rows.forEach((row, idx) => {
-        productCountryMap[row.id] = ["US", "UK", "CA", "AU", "DE", "FR"][idx % 6]
-      })
+    products.forEach((row, idx) => {
+      productCountryMap[row.id] = ["US", "UK", "CA", "AU", "DE", "FR"][idx % 6]
     })
-  }, [])
+  }, [products])
 
   const searchFilteredProducts = useMemo(() => {
     if (!query) return products
@@ -211,7 +212,12 @@ export default function MarketIntelligencePage() {
                 </svg>
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                {filteredTrends.map((trend) => (
+                {isLoadingProducts ? (
+                  Array.from({ length: 6 }).map((_, idx) => (
+                    <div key={`trend-skeleton-${idx}`} className="analytics-subpanel rounded-xl p-4 h-[124px] animate-pulse" />
+                  ))
+                ) : (
+                  filteredTrends.map((trend) => (
                     <motion.div key={trend.id} whileHover={isMobile ? undefined : { scale: 1.02, boxShadow: "0 14px 28px rgba(2, 6, 23, 0.35)" }} transition={{ duration: 0.2 }} onMouseEnter={isMobile ? undefined : () => setHoveredCountry(trend.country_code ?? null)} onMouseLeave={isMobile ? undefined : () => setHoveredCountry(null)} onClick={() => setSelectedCountry((current) => (current === trend.country_code ? null : trend.country_code ?? null))} className={`analytics-subpanel rounded-xl p-4 cursor-pointer transform-gpu touch-manipulation ${selectedCountry === trend.country_code ? "border-primary shadow-[0_0_20px_rgba(139,92,246,0.3)]" : ""}`}>
                     <div className="flex items-center justify-between mb-3">
                       <p className="text-sm font-semibold text-foreground">{trend.country_code}</p>
@@ -221,7 +227,8 @@ export default function MarketIntelligencePage() {
                     <p className="text-2xl font-bold text-foreground mt-2">+{trend.growth_percentage?.toFixed(1)}%</p>
                     <p className="text-xs text-muted-foreground mt-1">Intensity {trend.intensity_level}/5</p>
                   </motion.div>
-                ))}
+                ))
+                )}
               </div>
             </div>
           </motion.section>
@@ -231,6 +238,9 @@ export default function MarketIntelligencePage() {
               <div className="analytics-panel rounded-xl p-4">
                 <h2 className="text-lg font-semibold text-foreground mb-4">Market Win-Rate Trend (30 Days)</h2>
                 <div className="h-[280px]">
+                {isLoadingProducts ? (
+                  <div className="h-full rounded-xl analytics-subpanel animate-pulse" />
+                ) : (
                   <ResponsiveContainer width="100%" height="100%">
                     <AreaChart data={winRateAreaData}>
                       <defs><linearGradient id="winRateGradient" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#8B5CF6" stopOpacity={0.6} /><stop offset="100%" stopColor="#8B5CF6" stopOpacity={0.04} /></linearGradient></defs>
@@ -241,11 +251,15 @@ export default function MarketIntelligencePage() {
                       <Area type="monotone" dataKey="score" stroke="#A78BFA" strokeWidth={2.5} fill="url(#winRateGradient)" />
                     </AreaChart>
                   </ResponsiveContainer>
+                )}
                 </div>
               </div>
               <div className="analytics-panel rounded-xl p-4">
                 <h2 className="text-lg font-semibold text-foreground mb-4">Category Saturation Index</h2>
                 <div className="h-[280px]">
+                {isLoadingProducts ? (
+                  <div className="h-full rounded-xl analytics-subpanel animate-pulse" />
+                ) : (
                   <ResponsiveContainer width="100%" height="100%">
                     <BarChart data={categorySaturationData}>
                       <CartesianGrid strokeDasharray="3 3" stroke="rgba(139, 92, 246, 0.12)" />
@@ -256,6 +270,7 @@ export default function MarketIntelligencePage() {
                       <Bar dataKey="avgProfit" fill="#22C55E" radius={[8, 8, 0, 0]} />
                     </BarChart>
                   </ResponsiveContainer>
+                )}
                 </div>
               </div>
             </motion.section>
@@ -265,7 +280,12 @@ export default function MarketIntelligencePage() {
             <div className="analytics-panel rounded-xl p-4">
               <h2 className="text-lg font-semibold text-foreground mb-4">Competitor Live Spying</h2>
               <div className="flex gap-3 overflow-x-auto pb-2">
-                {competitorFeed.map((item) => {
+                {isLoadingProducts ? (
+                  Array.from({ length: 4 }).map((_, idx) => (
+                    <div key={`feed-skeleton-${idx}`} className="analytics-subpanel min-w-[280px] rounded-xl px-4 py-3 h-[110px] animate-pulse" />
+                  ))
+                ) : (
+                  competitorFeed.map((item) => {
                   const storeName = (item.metadata as { store_name?: string } | null)?.store_name ?? "Unknown Store"
                   const detectedProduct = (item.metadata as { detected_product?: string } | null)?.detected_product ?? "Unknown Product"
                   const spend = (item.metadata as { ad_spend_est?: string } | null)?.ad_spend_est ?? "N/A"
@@ -280,7 +300,8 @@ export default function MarketIntelligencePage() {
                       <p className="text-xs text-primary mt-1">Ad Spend Est.: {spend}</p>
                     </motion.div>
                   )
-                })}
+                })
+                )}
               </div>
             </div>
           </motion.section>
@@ -291,7 +312,15 @@ export default function MarketIntelligencePage() {
               <table className="w-full min-w-[900px] text-sm">
                 <thead><tr className="text-left text-muted-foreground border-b border-border"><th className="py-3 pr-3">Product Name</th><th className="py-3 pr-3">Category</th><th className="py-3 pr-3">Avg. Cost</th><th className="py-3 pr-3">Avg. SRP</th><th className="py-3 pr-3">Predicted Profit</th><th className="py-3 pr-3">Saturation Score</th><th className="py-3 pr-3">Actions</th></tr></thead>
                 <tbody>
-                  {opportunityRows.map(({ product, predictedProfit, saturationScore }) => {
+                  {isLoadingProducts
+                    ? Array.from({ length: 6 }).map((_, idx) => (
+                        <tr key={`table-skeleton-${idx}`} className="border-b border-border/60">
+                          <td className="py-3 pr-3" colSpan={7}>
+                            <div className="h-10 rounded-lg analytics-subpanel animate-pulse" />
+                          </td>
+                        </tr>
+                      ))
+                    : opportunityRows.map(({ product, predictedProfit, saturationScore }) => {
                     const isSaved = savedProducts.some((item) => item.product_id === product.id)
                     const productId = String(product.id)
                     const isResearching = Boolean(scanningProducts[productId]) || isRedirecting

@@ -7,15 +7,15 @@ create policy "Users can update own profile"
 on public.profiles
 for update
 to authenticated
-using (auth.uid() = id)
-with check (auth.uid() = id);
+using (coalesce(auth.jwt() ->> 'sub', auth.uid()::text) = id)
+with check (coalesce(auth.jwt() ->> 'sub', auth.uid()::text) = id);
 
 drop policy if exists "Users can insert own profile" on public.profiles;
 create policy "Users can insert own profile"
 on public.profiles
 for insert
 to authenticated
-with check (auth.uid() = id);
+with check (coalesce(auth.jwt() ->> 'sub', auth.uid()::text) = id);
 
 drop policy if exists "Profiles are public" on public.profiles;
 create policy "Profiles are public"

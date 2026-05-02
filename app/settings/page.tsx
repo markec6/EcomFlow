@@ -216,19 +216,21 @@ export default function SettingsPage() {
       return
     }
 
+    const nextFullName = fullName.trim()
+    const nextPublicBio = publicBio.trim()
     const profilesTable = supabase.from("profiles") as any
-    const { error } = await profilesTable
-      .upsert(
-        {
-          id: clerkUserId,
-          full_name: fullName.trim() || null,
-          public_bio: publicBio.trim() || null,
-        },
-        { onConflict: "id" }
-      )
+    const { data, error } = await profilesTable
+      .update({
+        full_name: nextFullName || null,
+        public_bio: nextPublicBio || null,
+      })
+      .eq("id", clerkUserId)
+      .select("id")
+      .maybeSingle()
 
     setSavingInfo(false)
-    if (error) {
+    if (error || !data?.id) {
+      console.error("Profile update failed:", error)
       toast.error("Could not save personal info.")
       return
     }
@@ -278,7 +280,6 @@ export default function SettingsPage() {
       toast.error("Could not save preferences.")
       return false
     }
-    setTheme(nextDarkMode ? "dark" : "light")
     toast.success("Preferences saved.")
     return true
   }
@@ -317,28 +318,38 @@ export default function SettingsPage() {
   }
 
   const handleDeleteAccount = async () => {
+    if (!isSignedIn || !clerkUserId) {
+      toast.error("Nisi logovan")
+      return
+    }
+
     setDeletingAccount(true)
-    const supabase = getSupabaseClient()
     try {
-      if (supabase && clerkUserId) {
-        const profilesTable = supabase.from("profiles") as any
-        await profilesTable.delete().eq("id", clerkUserId)
+      const response = await fetch("/api/account/delete", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+      })
+      const result = (await response.json().catch(() => null)) as
+        | { ok?: boolean; error?: string }
+        | null
+      if (!response.ok || !result?.ok) {
+        throw new Error(result?.error ?? "Could not delete account.")
       }
 
-      if (user) {
-        await (user as unknown as { delete: () => Promise<void> }).delete()
-      }
-
-      await signOut()
+      await signOut().catch(() => {
+        // Account is already removed server-side; continue local cleanup.
+      })
       clearClientSessionData()
       window.localStorage.setItem("guest_credits", "3")
       window.sessionStorage.setItem("guest_credits", "3")
       setConfirmDeleteOpen(false)
       toast.success("Account deleted.")
-      router.push("/")
+      router.replace("/")
       router.refresh()
     } catch (error) {
-      const message = (error as { errors?: { message?: string }[] } | undefined)?.errors?.[0]?.message
+      const message =
+        (error as Error | undefined)?.message ??
+        (error as { errors?: { message?: string }[] } | undefined)?.errors?.[0]?.message
       toast.error(message ?? "Could not delete account.")
     } finally {
       setDeletingAccount(false)
@@ -482,11 +493,10 @@ export default function SettingsPage() {
                   checked={darkMode}
                   disabled={savingPreferences}
                   onCheckedChange={(checked) => {
-                    const previous = darkMode
                     setDarkMode(checked)
+                    setTheme(checked ? "dark" : "light")
                     void (async () => {
-                      const ok = await savePreferences(checked, emailAlerts, publicProfile)
-                      if (!ok) setDarkMode(previous)
+                      await savePreferences(checked, emailAlerts, publicProfile)
                     })()
                   }}
                 />

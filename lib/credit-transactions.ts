@@ -15,11 +15,19 @@ export async function spendCreditForProductScan(
   productId: string,
   actionType: ScanActionType = "deep_scan"
 ): Promise<SpendCreditResult> {
+  const controller = new AbortController()
+  const timeout = window.setTimeout(() => controller.abort(), 12000)
   const response = await fetch("/api/credits/spend", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ userId, productId, actionType }),
-  })
+    signal: controller.signal,
+  }).catch(() => null)
+  window.clearTimeout(timeout)
+
+  if (!response) {
+    return { ok: false, reason: "rpc_failed" }
+  }
 
   const result = (await response.json().catch(() => null)) as
     | { ok?: boolean; remainingCredits?: number; reason?: string }

@@ -5,6 +5,7 @@ import { motion, AnimatePresence } from "framer-motion"
 import Image from "next/image"
 import { Copy, ExternalLink, Loader2 } from "lucide-react"
 import { LineChart, Line, ResponsiveContainer, Tooltip } from "recharts"
+import useSWR from "swr"
 import { Sidebar } from "@/components/dashboard/sidebar"
 import { Header } from "@/components/dashboard/header"
 import { ProductCard } from "@/components/dashboard/product-card"
@@ -23,6 +24,27 @@ const initialSavedProducts: SavedProduct[] = [
   { id: "s3", user_id: "u1", product_id: "f8c58f08-54f6-4efe-9575-95e0a2e6f101", status: "pushed_to_shopify", created_at: STATIC_TS },
 ]
 
+async function fetchVaultBootstrap() {
+  const client = getSupabaseClient()
+
+  const savedRowsPromise = client
+    ? client
+        .from("saved_products")
+        .select("id,user_id,product_id,status,created_at")
+        .then(({ data }) => (data?.length ? data : initialSavedProducts))
+    : Promise.resolve(initialSavedProducts)
+
+  const productsPromise = fetchProductsFromSupabase({
+    limit: 24,
+    includeCompetitors: false,
+    includeAiCopyVariations: true,
+  })
+
+  const [savedRows, products] = await Promise.all([savedRowsPromise, productsPromise])
+
+  return { savedRows, products }
+}
+
 export default function VaultPage() {
   const [searchQuery, setSearchQuery] = useState("")
   const [products, setProducts] = useState<Product[]>([])
@@ -35,18 +57,18 @@ export default function VaultPage() {
   const [rewriteLoading, setRewriteLoading] = useState(false)
   const [rewrittenCopy, setRewrittenCopy] = useState<{ emotional?: string; professional?: string }>({})
   const [verifyingUrl, setVerifyingUrl] = useState<string | null>(null)
+  const { data: vaultBootstrap, isLoading: isLoadingVault } = useSWR("vault-bootstrap", fetchVaultBootstrap, {
+    revalidateOnFocus: false,
+    revalidateIfStale: false,
+    dedupingInterval: 60_000,
+    keepPreviousData: true,
+  })
 
   useEffect(() => {
-    const client = getSupabaseClient()
-    if (!client) return
-    client.from("saved_products").select("id,user_id,product_id,status,created_at").then(({ data }) => {
-      if (data?.length) setSavedRows(data)
-    })
-  }, [])
-
-  useEffect(() => {
-    fetchProductsFromSupabase().then((rows) => setProducts(rows))
-  }, [])
+    if (!vaultBootstrap) return
+    setSavedRows(vaultBootstrap.savedRows)
+    setProducts(vaultBootstrap.products)
+  }, [vaultBootstrap])
 
   const vaultItems = useMemo<VaultItem[]>(
     () =>
@@ -194,48 +216,52 @@ export default function VaultPage() {
           </motion.section>
 
           <motion.section initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.25 }} className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-            {filteredVault.map((item, index) => (
-              <ProductCard
-                key={item.id}
-                index={index}
-                mode="vault"
-                product={{
-                  id: item.product.id,
-                  title: item.product.name,
-                  category: item.product.category ?? "Unknown",
-                  image: item.product.image_url ?? "https://images.unsplash.com/photo-1511497584788-876760111969?w=800&h=600&fit=crop",
-                  winRateScore: Math.round((item.product.trend_data?.slice(-3).reduce((a, b) => a + b, 0) ?? 210) / 3),
-                  tags: [item.product.category],
-                  cost: item.product.base_cost ?? 0,
-                  srp: item.product.market_price ?? 0,
-                  profit: item.product.margin ?? 0,
-                }}
-                selected={selectedIds.includes(item.id)}
-                onToggleSelect={() => toggleSelected(item.id)}
-                priority={priorityIds.includes(item.id)}
-                onTogglePriority={() =>
-                  setPriorityIds((current) =>
-                    current.includes(item.id) ? current.filter((id) => id !== item.id) : [...current, item.id]
-                  )
-                }
-                statusBadge={
-                  item.product.ai_copy_variations
-                    ? { label: "Ready to Launch", tone: "ready" }
-                    : { label: "Pending Analysis", tone: "pending" }
-                }
-                onOpenLab={() => {
-                  setCopyTab("emotional")
-                  setActiveItem(item)
-                  setActiveProductId(item.product.id)
-                }}
-                onShopifyExport={() => window.alert(`Exporting ${item.product.name} to Shopify...`)}
-                onEditCopy={() => {
-                  setActiveItem(item)
-                  setCopyTab("emotional")
-                }}
-                onDelete={() => handleDelete(item.id)}
-              />
-            ))}
+            {isLoadingVault && products.length === 0
+              ? Array.from({ length: 6 }).map((_, idx) => (
+                  <div key={`vault-skeleton-${idx}`} className="h-[360px] rounded-xl glass-panel border border-primary/20 animate-pulse" />
+                ))
+              : filteredVault.map((item, index) => (
+                  <ProductCard
+                    key={item.id}
+                    index={index}
+                    mode="vault"
+                    product={{
+                      id: item.product.id,
+                      title: item.product.name,
+                      category: item.product.category ?? "Unknown",
+                      image: item.product.image_url ?? "https://images.unsplash.com/photo-1511497584788-876760111969?w=800&h=600&fit=crop",
+                      winRateScore: Math.round((item.product.trend_data?.slice(-3).reduce((a, b) => a + b, 0) ?? 210) / 3),
+                      tags: [item.product.category],
+                      cost: item.product.base_cost ?? 0,
+                      srp: item.product.market_price ?? 0,
+                      profit: item.product.margin ?? 0,
+                    }}
+                    selected={selectedIds.includes(item.id)}
+                    onToggleSelect={() => toggleSelected(item.id)}
+                    priority={priorityIds.includes(item.id)}
+                    onTogglePriority={() =>
+                      setPriorityIds((current) =>
+                        current.includes(item.id) ? current.filter((id) => id !== item.id) : [...current, item.id]
+                      )
+                    }
+                    statusBadge={
+                      item.product.ai_copy_variations
+                        ? { label: "Ready to Launch", tone: "ready" }
+                        : { label: "Pending Analysis", tone: "pending" }
+                    }
+                    onOpenLab={() => {
+                      setCopyTab("emotional")
+                      setActiveItem(item)
+                      setActiveProductId(item.product.id)
+                    }}
+                    onShopifyExport={() => window.alert(`Exporting ${item.product.name} to Shopify...`)}
+                    onEditCopy={() => {
+                      setActiveItem(item)
+                      setCopyTab("emotional")
+                    }}
+                    onDelete={() => handleDelete(item.id)}
+                  />
+                ))}
           </motion.section>
         </div>
       </main>

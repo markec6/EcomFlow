@@ -243,23 +243,58 @@ export function normalizeProduct(record: ProductRecord) {
   }
 }
 
-export async function fetchProductsFromSupabase() {
+type FetchProductsOptions = {
+  limit?: number
+  includeCompetitors?: boolean
+  includeAiCopyVariations?: boolean
+}
+
+const BASE_PRODUCT_COLUMNS = ["id", "name", "category", "image_url", "base_cost", "market_price", "margin", "trend_data", "saturation_score"] as const
+
+export async function fetchProductsFromSupabase(options: FetchProductsOptions = {}) {
+  const { limit, includeCompetitors = true, includeAiCopyVariations = true } = options
   const client = getSupabaseClient()
-  if (!client) return seedProducts
-
-  const { data, error } = await client
-    .from("products")
-    .select("id,name,category,image_url,base_cost,market_price,margin,trend_data,saturation_score,competitors,ai_copy_variations")
-
-  if (error || !data) {
-    return seedProducts
+  if (!client) {
+    const fallbackRows = seedProducts.map((product) => ({
+      ...product,
+      competitors: includeCompetitors ? product.competitors : [],
+      ai_copy_variations: includeAiCopyVariations ? product.ai_copy_variations : { emotional_hook: "", professional_direct: "" },
+    }))
+    return typeof limit === "number" ? fallbackRows.slice(0, limit) : fallbackRows
   }
 
-  return data.map((row) => ({
+  const selectedColumns = [
+    ...BASE_PRODUCT_COLUMNS,
+    ...(includeCompetitors ? ["competitors"] : []),
+    ...(includeAiCopyVariations ? ["ai_copy_variations"] : []),
+  ].join(",")
+
+  let query = client
+    .from("products")
+    .select(selectedColumns)
+
+  if (typeof limit === "number") {
+    query = query.limit(limit)
+  }
+
+  const { data, error } = await (query as PromiseLike<{ data: unknown[] | null; error: unknown }>)
+
+  if (error || !data) {
+    const fallbackRows = seedProducts.map((product) => ({
+      ...product,
+      competitors: includeCompetitors ? product.competitors : [],
+      ai_copy_variations: includeAiCopyVariations ? product.ai_copy_variations : { emotional_hook: "", professional_direct: "" },
+    }))
+    return typeof limit === "number" ? fallbackRows.slice(0, limit) : fallbackRows
+  }
+
+  const rows = (data ?? []) as Array<Record<string, unknown>>
+
+  return rows.map((row) => ({
     ...row,
-    competitors: Array.isArray(row.competitors) ? (row.competitors as CompetitorProfile[]) : [],
+    competitors: includeCompetitors && Array.isArray(row.competitors) ? (row.competitors as CompetitorProfile[]) : [],
     ai_copy_variations:
-      typeof row.ai_copy_variations === "object" && row.ai_copy_variations
+      includeAiCopyVariations && typeof row.ai_copy_variations === "object" && row.ai_copy_variations
         ? (row.ai_copy_variations as { emotional_hook: string; professional_direct: string })
         : { emotional_hook: "", professional_direct: "" },
     trend_data: Array.isArray(row.trend_data) ? (row.trend_data as number[]) : [],
