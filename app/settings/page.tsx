@@ -82,6 +82,9 @@ export default function SettingsPage() {
   const [userEmail, setUserEmail] = useState<string | null>(null)
   const { profile, isGuest } = useAiCredits()
   const fileInputRef = useRef<HTMLInputElement | null>(null)
+  // Keep setTheme in a ref so loadSettings never re-runs when the theme changes.
+  const setThemeRef = useRef(setTheme)
+  useEffect(() => { setThemeRef.current = setTheme })
 
   useEffect(() => {
     const loadSettings = async () => {
@@ -112,16 +115,29 @@ export default function SettingsPage() {
       setFullName(settings?.full_name ?? "")
       setPublicBio(settings?.public_bio ?? "")
       setCurrentAvatarUrl(settings?.avatar_url || user?.imageUrl || null)
-      const persistedTheme = settings?.theme_preference ?? (settings?.dark_mode === false ? "light" : "dark")
-      setDarkMode(persistedTheme !== "light")
-      setTheme(persistedTheme)
       setEmailAlerts(settings?.email_alerts ?? true)
       setPublicProfile(settings?.public_profile ?? false)
+
+      // localStorage is the primary source of truth for theme.
+      // Only fall back to DB value if the user has never chosen a theme in this browser.
+      const localTheme = typeof window !== "undefined"
+        ? (localStorage.getItem("theme") as "dark" | "light" | null)
+        : null
+      const dbTheme: "dark" | "light" =
+        settings?.theme_preference === "light" || settings?.dark_mode === false ? "light" : "dark"
+      const effectiveTheme: "dark" | "light" =
+        localTheme === "light" || localTheme === "dark" ? localTheme : dbTheme
+      setDarkMode(effectiveTheme !== "light")
+      setThemeRef.current(effectiveTheme)
+
       setLoadingSettings(false)
     }
 
     void loadSettings()
-  }, [clerkUserId, isSignedIn, setTheme, user?.imageUrl, user?.primaryEmailAddress?.emailAddress])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [clerkUserId, isSignedIn, user?.imageUrl, user?.primaryEmailAddress?.emailAddress])
+  // Note: setTheme intentionally excluded from deps — storing it in setThemeRef prevents
+  // this effect from re-firing on every theme change, which was causing the 2-second revert.
 
   useEffect(() => {
     // Do not let an empty profile snapshot overwrite a freshly uploaded URL.
@@ -227,8 +243,23 @@ export default function SettingsPage() {
     toast.success("Personal info saved.")
   }
 
+  // Silent fire-and-forget — theme is already applied locally via next-themes / localStorage.
+  // DB failure only logs to console; the user stays in their chosen theme.
+  const saveDarkModeToDb = (isDark: boolean) => {
+    const supabase = getSupabaseClient()
+    if (!supabase || !clerkUserId) return
+    const profilesTable = supabase.from("profiles") as any
+    void profilesTable
+      .upsert(
+        { id: clerkUserId, theme_preference: isDark ? "dark" : "light", dark_mode: isDark },
+        { onConflict: "id" }
+      )
+      .then(({ error }: { error: { message: string } | null }) => {
+        if (error) console.log("[THEME] Background DB save failed (theme stays applied):", error.message)
+      })
+  }
+
   const savePreferences = async (
-    nextDarkMode = darkMode,
     nextEmailAlerts = emailAlerts,
     nextPublicProfile = publicProfile
   ): Promise<boolean> => {
@@ -240,29 +271,14 @@ export default function SettingsPage() {
     }
 
     const profilesTable = supabase.from("profiles") as any
-    let { error } = await profilesTable.upsert(
+    const { error } = await profilesTable.upsert(
       {
         id: clerkUserId,
-        theme_preference: nextDarkMode ? "dark" : "light",
-        dark_mode: nextDarkMode,
         email_alerts: nextEmailAlerts,
         public_profile: nextPublicProfile,
       },
       { onConflict: "id" }
     )
-
-    if (error && String(error.message ?? "").toLowerCase().includes("theme_preference")) {
-      const fallback = await profilesTable.upsert(
-        {
-          id: clerkUserId,
-          dark_mode: nextDarkMode,
-          email_alerts: nextEmailAlerts,
-          public_profile: nextPublicProfile,
-        },
-        { onConflict: "id" }
-      )
-      error = fallback.error
-    }
 
     setSavingPreferences(false)
     if (error) {
@@ -480,13 +496,10 @@ export default function SettingsPage() {
                 </div>
                 <Switch
                   checked={darkMode}
-                  disabled={savingPreferences}
                   onCheckedChange={(checked) => {
                     setDarkMode(checked)
                     setTheme(checked ? "dark" : "light")
-                    void (async () => {
-                      await savePreferences(checked, emailAlerts, publicProfile)
-                    })()
+                    saveDarkModeToDb(checked)
                   }}
                 />
               </div>
@@ -505,7 +518,7 @@ export default function SettingsPage() {
                     const previous = emailAlerts
                     setEmailAlerts(checked)
                     void (async () => {
-                      const ok = await savePreferences(darkMode, checked, publicProfile)
+                      const ok = await savePreferences(checked, publicProfile)
                       if (!ok) setEmailAlerts(previous)
                     })()
                   }}
@@ -523,7 +536,7 @@ export default function SettingsPage() {
                     const previous = publicProfile
                     setPublicProfile(checked)
                     void (async () => {
-                      const ok = await savePreferences(darkMode, emailAlerts, checked)
+                      const ok = await savePreferences(emailAlerts, checked)
                       if (!ok) setPublicProfile(previous)
                     })()
                   }}
