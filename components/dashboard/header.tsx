@@ -41,6 +41,13 @@ export const Header = memo(function Header({ searchQuery, onSearchChange }: Head
     const fallbackAvatarUrl = user?.imageUrl ?? profile.avatarUrl ?? null
 
     const fetchProfileAvatar = async () => {
+      // localStorage avatar always wins — set it immediately, no Supabase round-trip needed.
+      const localAvatar = typeof window !== "undefined" ? localStorage.getItem("ecomflow_avatar_url") : null
+      if (localAvatar) {
+        setAvatarUrl(localAvatar)
+        return
+      }
+
       setAvatarUrl((current) => current ?? fallbackAvatarUrl)
 
       if (isGuest || !clerkUserId) {

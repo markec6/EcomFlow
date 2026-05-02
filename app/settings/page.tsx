@@ -114,7 +114,9 @@ export default function SettingsPage() {
       const settings = data as ProfileSettings | null
       setFullName(settings?.full_name ?? "")
       setPublicBio(settings?.public_bio ?? "")
-      setCurrentAvatarUrl(settings?.avatar_url || user?.imageUrl || null)
+      // localStorage avatar overrides whatever Supabase has (local-first).
+      const localAvatar = typeof window !== "undefined" ? localStorage.getItem("ecomflow_avatar_url") : null
+      setCurrentAvatarUrl(localAvatar || settings?.avatar_url || user?.imageUrl || null)
       setEmailAlerts(settings?.email_alerts ?? true)
       setPublicProfile(settings?.public_profile ?? false)
 
@@ -169,43 +171,31 @@ export default function SettingsPage() {
       toast.error("Choose an image first.")
       return
     }
-    if (!clerkUserId) {
-      toast.error("Please log in to update your profile picture.")
-      return
-    }
 
     setUploading(true)
     try {
-      // STEP B: Send file to server for Supabase Storage upload
-      console.log("[AVATAR UPLOAD] STEP B: Sending file to /api/profile/avatar")
-      const body = new FormData()
-      body.append("file", file)
-      const response = await fetch("/api/profile/avatar", { method: "POST", body })
-      const result = (await response.json()) as { ok?: boolean; avatarUrl?: string; error?: string }
+      // Convert to base64 so the avatar survives a page refresh via localStorage.
+      const base64 = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader()
+        reader.onload = () => resolve(reader.result as string)
+        reader.onerror = reject
+        reader.readAsDataURL(file)
+      })
 
-      if (!response.ok || !result.ok || !result.avatarUrl) {
-        console.log("[AVATAR UPLOAD] STEP B FAILED: Server responded with:", result.error ?? response.status)
-        toast.error("Greška pri prenosu slike na server. Pogledaj konzolu za detalje.")
-        return
-      }
-      console.log("[AVATAR UPLOAD] STEP B OK: File uploaded, public URL:", result.avatarUrl)
-
-      // STEP C: Database already updated by API — reflect URL locally
-      console.log("[AVATAR UPLOAD] STEP C OK: Database sync confirmed by server.")
-      setCurrentAvatarUrl(result.avatarUrl)
-      setUploadedAvatarUrl(result.avatarUrl)
+      // Persist locally — no server call.
+      localStorage.setItem("ecomflow_avatar_url", base64)
+      setCurrentAvatarUrl(base64)
+      setUploadedAvatarUrl(base64)
       setSelectedFile(null)
       setPreviewUrl(null)
       if (fileInputRef.current) fileInputRef.current.value = ""
 
-      // STEP D: Push new avatar to header without full reload
-      console.log("[AVATAR UPLOAD] STEP D: Dispatching profile sync event to update header.")
-      window.dispatchEvent(new CustomEvent(PROFILE_EVENT, { detail: { avatarUrl: result.avatarUrl } }))
-      router.refresh()
+      // Update the Header avatar instantly via CustomEvent (no reload).
+      window.dispatchEvent(new CustomEvent(PROFILE_EVENT, { detail: { avatarUrl: base64 } }))
       toast.success("Profile picture updated.")
     } catch (error) {
-      console.log("[AVATAR UPLOAD] UNEXPECTED ERROR:", error)
-      toast.error("Greška pri prenosu slike na server. Pogledaj konzolu za detalje.")
+      console.log("[AVATAR UPLOAD] Error converting image:", error)
+      toast.error("Could not process image. Please try again.")
     } finally {
       setUploading(false)
     }
@@ -241,22 +231,6 @@ export default function SettingsPage() {
     }
     window.dispatchEvent(new Event(PROFILE_EVENT))
     toast.success("Personal info saved.")
-  }
-
-  // Silent fire-and-forget — theme is already applied locally via next-themes / localStorage.
-  // DB failure only logs to console; the user stays in their chosen theme.
-  const saveDarkModeToDb = (isDark: boolean) => {
-    const supabase = getSupabaseClient()
-    if (!supabase || !clerkUserId) return
-    const profilesTable = supabase.from("profiles") as any
-    void profilesTable
-      .upsert(
-        { id: clerkUserId, theme_preference: isDark ? "dark" : "light", dark_mode: isDark },
-        { onConflict: "id" }
-      )
-      .then(({ error }: { error: { message: string } | null }) => {
-        if (error) console.log("[THEME] Background DB save failed (theme stays applied):", error.message)
-      })
   }
 
   const savePreferences = async (
@@ -498,8 +472,8 @@ export default function SettingsPage() {
                   checked={darkMode}
                   onCheckedChange={(checked) => {
                     setDarkMode(checked)
+                    // next-themes persists to localStorage automatically — no DB call needed.
                     setTheme(checked ? "dark" : "light")
-                    saveDarkModeToDb(checked)
                   }}
                 />
               </div>
