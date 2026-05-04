@@ -26,52 +26,60 @@ interface HeaderProps {
 
 export const Header = memo(function Header({ searchQuery, onSearchChange }: HeaderProps) {
   const router = useRouter()
-  const { signOut, userId: clerkUserId } = useAuth()
+  const { signOut, userId: clerkUserId, isSignedIn, isLoaded: authLoaded } = useAuth()
   const { user } = useUser()
-  const { credits, isReady, isGuest, userEmail, profile } = useAiCredits()
+  const sessionEmail = isSignedIn ? (user?.primaryEmailAddress?.emailAddress ?? null) : null
+  const { credits, isReady, profile, guestCreditHeaderSummary } = useAiCredits()
   const isMobile = useIsMobile()
   const { isOpen, toggleSidebar } = useSidebarState()
   const supabaseConfigured = Boolean(process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY)
-  const sessionValid = !isGuest
+  const sessionValid = Boolean(isSignedIn)
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null)
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
+  const [mounted, setMounted] = useState(false)
+
+  useEffect(() => {
+    setMounted(true)
+  }, [])
 
   useEffect(() => {
     let cancelled = false
     const fallbackAvatarUrl = user?.imageUrl ?? profile.avatarUrl ?? null
 
     const fetchProfileAvatar = async () => {
-      // localStorage avatar always wins — set it immediately, no Supabase round-trip needed.
-      const localAvatar = typeof window !== "undefined" ? localStorage.getItem("ecomflow_avatar_url") : null
-      if (localAvatar) {
-        setAvatarUrl(localAvatar)
-        return
+      try {
+        // localStorage avatar always wins — set it immediately, no Supabase round-trip needed.
+        const localAvatar = typeof window !== "undefined" ? localStorage.getItem("ecomflow_avatar_url") : null
+        if (localAvatar) {
+          setAvatarUrl(localAvatar)
+          return
+        }
+
+        setAvatarUrl((current) => current ?? fallbackAvatarUrl)
+
+        if (!isSignedIn || !clerkUserId) {
+          setAvatarUrl(fallbackAvatarUrl)
+          return
+        }
+
+        const supabase = getSupabaseClient()
+        if (!supabase) {
+          setAvatarUrl(fallbackAvatarUrl)
+          return
+        }
+
+        const profilesTable = supabase.from("profiles") as any
+        const { data, error } = await profilesTable.select("avatar_url").eq("id", clerkUserId).maybeSingle()
+
+        if (cancelled) return
+        if (error) {
+          setAvatarUrl(fallbackAvatarUrl)
+          return
+        }
+        setAvatarUrl(data?.avatar_url || fallbackAvatarUrl)
+      } catch {
+        if (!cancelled) setAvatarUrl(fallbackAvatarUrl)
       }
-
-      setAvatarUrl((current) => current ?? fallbackAvatarUrl)
-
-      if (isGuest || !clerkUserId) {
-        setAvatarUrl(fallbackAvatarUrl)
-        return
-      }
-
-      const supabase = getSupabaseClient()
-      if (!supabase) {
-        setAvatarUrl(fallbackAvatarUrl)
-        return
-      }
-
-      const profilesTable = supabase.from("profiles") as any
-      const { data, error } = await profilesTable
-        .select("avatar_url")
-        .eq("id", clerkUserId)
-        .maybeSingle()
-
-      if (cancelled) return
-      if (error) {
-        console.error("Header avatar fetch failed:", error)
-      }
-      setAvatarUrl(data?.avatar_url || fallbackAvatarUrl)
     }
 
     void fetchProfileAvatar()
@@ -89,7 +97,7 @@ export const Header = memo(function Header({ searchQuery, onSearchChange }: Head
       cancelled = true
       window.removeEventListener(PROFILE_EVENT, profileEventListener)
     }
-  }, [clerkUserId, isGuest, profile.avatarUrl, user?.imageUrl])
+  }, [clerkUserId, isSignedIn, profile.avatarUrl, user?.imageUrl])
 
   const handleLogout = async () => {
     await signOut()
@@ -100,12 +108,12 @@ export const Header = memo(function Header({ searchQuery, onSearchChange }: Head
 
   const initials = useMemo(
     () =>
-      (profile.fullName || profile.username || userEmail || "G")
+      (profile.fullName || profile.username || sessionEmail || "G")
         .split(" ")
         .map((part) => part[0]?.toUpperCase() ?? "")
         .join("")
         .slice(0, 2),
-    [profile.fullName, profile.username, userEmail]
+    [profile.fullName, profile.username, sessionEmail]
   )
 
   const avatarNode = avatarUrl ? (
@@ -115,7 +123,7 @@ export const Header = memo(function Header({ searchQuery, onSearchChange }: Head
       alt="User avatar"
       className="w-full h-full rounded-full object-cover"
     />
-  ) : isGuest ? (
+  ) : !isSignedIn ? (
     <div className="w-full h-full bg-zinc-700 text-zinc-300 flex items-center justify-center">
       <UserCircle2 className="w-6 h-6" />
     </div>
@@ -195,29 +203,31 @@ export const Header = memo(function Header({ searchQuery, onSearchChange }: Head
             Supabase Connection: {supabaseConfigured ? "Active" : "Inactive (Missing Env)"}
           </span>
         </div>
-        {!isReady ? (
+        {!mounted || !isReady || !authLoaded ? (
           <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl glass-panel border border-primary/25">
             <Zap className="w-3.5 h-3.5 text-primary" />
             <span className="text-xs text-primary font-semibold">Loading credits...</span>
           </div>
-        ) : !isGuest ? (
+        ) : isSignedIn ? (
           <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl glass-panel border border-primary/25">
             <Zap className="w-3.5 h-3.5 text-primary" />
             <span className="text-xs text-primary font-semibold">{credits} Credits</span>
-            {userEmail && <span className="text-[11px] text-muted-foreground">• {userEmail}</span>}
-          </div>
-        ) : isGuest && credits > 0 ? (
-          <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl glass-panel border border-primary/25">
-            <Zap className="w-3.5 h-3.5 text-primary" />
-            <span className="text-xs text-primary font-semibold">{credits}/3 Guest Credits</span>
+            {sessionEmail ? (
+              <span className="text-[11px] text-muted-foreground">• {sessionEmail}</span>
+            ) : null}
           </div>
         ) : (
-          <button
-            onClick={() => router.push("/signup")}
-            className="px-3 py-1.5 min-h-11 rounded-xl bg-gradient-to-r from-violet-600 to-purple-500 text-white text-xs font-semibold hover:opacity-95 touch-manipulation"
-          >
-            Sign up for 300 credits
-          </button>
+          <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl glass-panel border border-primary/25">
+            <Zap className="w-3.5 h-3.5 text-primary" />
+            <span className="text-xs text-primary font-semibold">{guestCreditHeaderSummary}</span>
+            <button
+              type="button"
+              onClick={() => router.push("/login")}
+              className="ml-1 px-2 py-0.5 rounded-lg bg-gradient-to-r from-violet-600 to-purple-500 text-white text-[10px] font-semibold hover:opacity-95"
+            >
+              Sign in
+            </button>
+          </div>
         )}
 
         {/* Notification Bell */}
@@ -239,7 +249,12 @@ export const Header = memo(function Header({ searchQuery, onSearchChange }: Head
               <div className="relative w-10 h-10 rounded-full bg-card border-2 border-background overflow-hidden">
                 {avatarNode}
               </div>
-              {!isGuest && (
+              {!isSignedIn && (
+                <span className="absolute -bottom-1 -right-1 px-1.5 py-0.5 text-[10px] font-bold rounded bg-zinc-600 text-white">
+                  Guest
+                </span>
+              )}
+              {isSignedIn && (
                 <span className="absolute -bottom-1 -right-1 px-1.5 py-0.5 text-[10px] font-bold rounded bg-primary text-white">
                   PRO
                 </span>
@@ -247,10 +262,12 @@ export const Header = memo(function Header({ searchQuery, onSearchChange }: Head
             </motion.button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="glass-panel bg-slate-950/95 border border-primary/20 min-w-[210px]">
-            <div className="px-2 py-1.5 text-xs text-muted-foreground truncate">
-              {userEmail ?? "Guest"}
-            </div>
-            {!isGuest ? (
+            {authLoaded ? (
+              <div className="px-2 py-1.5 text-xs text-muted-foreground truncate">
+                {isSignedIn ? sessionEmail ?? "Account" : "Guest"}
+              </div>
+            ) : null}
+            {isSignedIn ? (
               <>
                 <DropdownMenuItem onClick={() => router.push("/settings")} className="text-foreground min-h-11 touch-manipulation">
                   <Settings className="w-4 h-4" />
@@ -285,7 +302,9 @@ export const Header = memo(function Header({ searchQuery, onSearchChange }: Head
                 {avatarNode}
               </div>
               <div className="min-w-0">
-                <p className="text-sm font-semibold text-foreground truncate">{userEmail ?? "Guest User"}</p>
+                <p className="text-sm font-semibold text-foreground truncate">
+                  {isSignedIn ? sessionEmail ?? "Account" : "Guest"}
+                </p>
                 <p className="text-xs text-muted-foreground">{sessionValid ? "Authenticated profile" : "Guest mode"}</p>
               </div>
             </div>
@@ -298,7 +317,7 @@ export const Header = memo(function Header({ searchQuery, onSearchChange }: Head
                 </span>
               </div>
 
-              {!isReady ? (
+              {!mounted || !isReady || !authLoaded ? (
                 <div className="flex items-center justify-between rounded-xl border border-primary/20 px-3 py-2">
                   <span className="inline-flex items-center gap-1.5 text-xs text-primary font-semibold">
                     <Zap className="w-3.5 h-3.5" />
@@ -306,7 +325,7 @@ export const Header = memo(function Header({ searchQuery, onSearchChange }: Head
                   </span>
                   <span className="text-xs text-foreground font-semibold">Loading...</span>
                 </div>
-              ) : !isGuest ? (
+              ) : isSignedIn ? (
                 <div className="flex items-center justify-between rounded-xl border border-primary/20 px-3 py-2">
                   <span className="inline-flex items-center gap-1.5 text-xs text-primary font-semibold">
                     <Zap className="w-3.5 h-3.5" />
@@ -314,24 +333,19 @@ export const Header = memo(function Header({ searchQuery, onSearchChange }: Head
                   </span>
                   <span className="text-xs text-foreground font-semibold">{credits}</span>
                 </div>
-              ) : isGuest && credits > 0 ? (
+              ) : (
                 <div className="flex items-center justify-between rounded-xl border border-primary/20 px-3 py-2">
                   <span className="inline-flex items-center gap-1.5 text-xs text-primary font-semibold">
                     <Zap className="w-3.5 h-3.5" />
-                    Guest Credits
+                    Guest
                   </span>
-                  <span className="text-xs text-foreground font-semibold">{credits}/3</span>
+                  <span className="text-xs text-foreground font-semibold text-right max-w-[14rem]">
+                    {guestCreditHeaderSummary}
+                  </span>
                 </div>
-              ) : (
-                <button
-                  onClick={() => router.push("/signup")}
-                  className="w-full min-h-11 rounded-xl bg-gradient-to-r from-violet-600 to-purple-500 px-3 py-2 text-sm font-semibold text-white touch-manipulation"
-                >
-                  Sign up for 300 credits
-                </button>
               )}
 
-              {!isGuest ? (
+              {isSignedIn ? (
                 <button
                   onClick={() => router.push("/settings")}
                   className="w-full min-h-11 rounded-xl border border-white/10 px-3 py-2 text-sm text-foreground touch-manipulation"

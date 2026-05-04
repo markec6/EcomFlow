@@ -9,6 +9,22 @@ type SpendCreditResult =
   | { ok: true; remainingCredits: number }
   | { ok: false; reason: "duplicate" | "insufficient_credits" | "profile_missing" | "insert_failed" | "update_failed" | "rpc_failed" }
 
+/** Fire-and-forget server spend after optimistic local decrement + navigation. */
+export function silentSyncSpendCredit(
+  productId: string,
+  actionType: ScanActionType = "deep_scan",
+) {
+  if (typeof window === "undefined") return
+  const id = String(productId ?? "").trim()
+  if (!id) return
+  void fetch("/api/credits/spend", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ productId: id, actionType }),
+    keepalive: true,
+  }).catch(() => {})
+}
+
 export async function spendCreditForProductScan(
   _client: SupabaseClient<Database> | null,
   userId: string,

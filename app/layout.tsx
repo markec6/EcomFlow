@@ -1,11 +1,7 @@
 import type { Metadata } from 'next'
 import { Inter, Geist_Mono } from 'next/font/google'
 import { Analytics } from '@vercel/analytics/next'
-import { ClerkProvider } from "@clerk/nextjs"
-import { ThemeProvider } from '@/components/theme-provider'
-import { Toaster } from '@/components/ui/sonner'
-import { SidebarStateProvider } from "@/components/dashboard/sidebar-state"
-import { ProfileBootstrap } from "@/components/auth/profile-bootstrap"
+import { RootProviders } from '@/components/root-providers'
 import './globals.css'
 
 const clerkPublishableKey = process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY
@@ -48,15 +44,7 @@ export default function RootLayout({
   return (
     <html lang="en" className="bg-background" suppressHydrationWarning={true}>
       <body className={`${inter.variable} ${geistMono.variable} font-sans antialiased`} suppressHydrationWarning={true}>
-        <ClerkProvider publishableKey={clerkPublishableKey}>
-          <ThemeProvider attribute="class" defaultTheme="dark" enableSystem={false}>
-            <SidebarStateProvider>
-              <ProfileBootstrap />
-              {children}
-            </SidebarStateProvider>
-            <Toaster />
-          </ThemeProvider>
-        </ClerkProvider>
+        <RootProviders publishableKey={clerkPublishableKey}>{children}</RootProviders>
         {process.env.NODE_ENV === 'production' && <Analytics />}
       </body>
     </html>

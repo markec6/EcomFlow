@@ -6,6 +6,14 @@ export const SIGNUP_CREDITS = 300
 const DEFAULT_PLAN = "FREE"
 let rlsWriteBlockedLogged = false
 
+function warnRlsOnce() {
+  if (rlsWriteBlockedLogged) return
+  console.warn(
+    "Supabase profile upsert blocked by RLS (no valid Clerk JWT on the request, or policy mismatch). Credits may still work via cache; ensure SupabaseClerkTokenBridge is mounted and Clerk has a `supabase` JWT template, or rely on the Clerk webhook + service role."
+  )
+  rlsWriteBlockedLogged = true
+}
+
 type SyncUserInput = {
   clerkUserId: string
   email: string
@@ -80,6 +88,41 @@ function isRlsWriteError(error: unknown) {
   return code === "42501" || message.includes("row-level security")
 }
 
+/** Missing/invalid Clerk JWT on the request — do not invent a local 300-credit profile. */
+function isUnauthorizedOrJwtError(error: unknown) {
+  if (error == null || typeof error !== "object") return false
+  const e = error as { code?: string; message?: string; status?: number; statusCode?: number }
+  const status = e.status ?? e.statusCode
+  if (status === 401) return true
+  if (e.code === "PGRST301") return true
+  const msg = String(e.message ?? "").toLowerCase()
+  return (
+    msg.includes("invalid jwt") ||
+    msg.includes("jwt expired") ||
+    msg.includes("jwt signature") ||
+    msg.includes("permission denied for jwt")
+  )
+}
+
+/** Full row snapshot for skipping redundant upserts / races after an empty first lookup. */
+async function fetchProfileRowById(client: WritableSupabaseClient, clerkUserId: string) {
+  const { data, error } = await client
+    .from("profiles")
+    .select("id,email,plan_type,ai_credits_remaining,total_credits_used,credits")
+    .eq("id", clerkUserId)
+    .maybeSingle()
+
+  if (error && !isMissingColumnError(error)) {
+    if (!isUnauthorizedOrJwtError(error)) {
+      console.warn("Profile row fetch by id failed:", error)
+    }
+    return null
+  }
+
+  if (!data || typeof data !== "object") return null
+  return data as Record<string, unknown>
+}
+
 async function findProfileByClerkId(client: WritableSupabaseClient, clerkUserId: string) {
   const { data, error } = await client
     .from("profiles")
@@ -87,8 +130,10 @@ async function findProfileByClerkId(client: WritableSupabaseClient, clerkUserId:
     .eq("id", clerkUserId)
     .maybeSingle()
 
-  if (error) {
-    console.error("Profile lookup by Clerk ID failed:", error)
+  if (error && !isMissingColumnError(error)) {
+    if (!isUnauthorizedOrJwtError(error)) {
+      console.warn("Profile lookup by Clerk ID failed:", error)
+    }
   }
 
   return normalizeProfile(data)
@@ -105,7 +150,9 @@ async function findProfileByEmail(client: WritableSupabaseClient, email: string)
     .maybeSingle()
 
   if (error && !isMissingColumnError(error)) {
-    console.error("Profile lookup by email failed:", error)
+    if (!isUnauthorizedOrJwtError(error)) {
+      console.warn("Profile lookup by email failed:", error)
+    }
   }
 
   return normalizeProfile(data)
@@ -138,44 +185,82 @@ export async function ensureSupabaseProfile(input: SyncUserInput): Promise<Synce
     total_credits_used: 0,
   }
 
-  let { data, error } = await client
-    .from("profiles")
-    .upsert(insertPayload, { onConflict: "id" })
-    .select("id,ai_credits_remaining,credits")
-    .single()
+  try {
+    const rowRecheck = await fetchProfileRowById(client, input.clerkUserId)
+    if (rowRecheck?.id != null) {
+      // Avoid clobbering an existing profile with signup defaults; also skips writes when columns already match.
+      return normalizeProfile(rowRecheck)
+    }
 
-  if (error && isMissingConflictTargetError(error)) {
-    const retry = await client
-      .from("profiles")
-      .insert(insertPayload)
-      .select("id,ai_credits_remaining,credits")
-      .single()
-    data = retry.data
-    error = retry.error
-  }
+    let data: Record<string, unknown> | null = null
+    let error: unknown = null
 
-  if (error) {
-    if (isRlsWriteError(error)) {
-      if (!rlsWriteBlockedLogged) {
-        console.error("Supabase profile upsert blocked by RLS. Configure Clerk webhook + service role sync.")
-        rlsWriteBlockedLogged = true
+    try {
+      const upsertRes = await client
+        .from("profiles")
+        .upsert(insertPayload, { onConflict: "id" })
+        .select("id,ai_credits_remaining,credits")
+        .single()
+      data = upsertRes.data
+      error = upsertRes.error
+    } catch (writeErr) {
+      error = writeErr
+    }
+
+    if (error && isMissingConflictTargetError(error)) {
+      try {
+        const retry = await client
+          .from("profiles")
+          .insert(insertPayload)
+          .select("id,ai_credits_remaining,credits")
+          .single()
+        data = retry.data
+        error = retry.error
+      } catch (retryErr) {
+        error = retryErr
       }
+    }
+
+    if (error) {
+      if (isUnauthorizedOrJwtError(error)) {
+        return null
+      }
+      if (isRlsWriteError(error)) {
+        warnRlsOnce()
+        return null
+      }
+      console.warn("Supabase profile upsert failed:", error)
+
+      const fallbackProfile =
+        (await findProfileByClerkId(client, input.clerkUserId)) ??
+        (await findProfileByEmail(client, email))
+      if (fallbackProfile) return fallbackProfile
+
+      return {
+        id: input.clerkUserId,
+        credits: SIGNUP_CREDITS,
+      }
+    }
+
+    return normalizeProfile(data)
+  } catch (caught) {
+    if (isUnauthorizedOrJwtError(caught)) {
       return null
     }
-    console.error("Supabase profile upsert failed:", error)
-
+    if (isRlsWriteError(caught)) {
+      warnRlsOnce()
+      return null
+    }
+    console.warn("Supabase profile sync failed:", caught)
     const fallbackProfile =
       (await findProfileByClerkId(client, input.clerkUserId)) ??
       (await findProfileByEmail(client, email))
     if (fallbackProfile) return fallbackProfile
-
     return {
       id: input.clerkUserId,
       credits: SIGNUP_CREDITS,
     }
   }
-
-  return normalizeProfile(data)
 }
 
 export async function syncClerkUserToSupabase(input: SyncUserInput) {

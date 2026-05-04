@@ -1,10 +1,14 @@
 "use client"
 
-import { memo, useEffect, useState, type MouseEvent } from "react"
+import { memo, type MouseEvent } from "react"
 import { motion } from "framer-motion"
 import Image from "next/image"
-import { Loader2, Pencil, Star, Store, Trash2 } from "lucide-react"
+import { useRouter } from "next/navigation"
+import { Pencil, Star, Store, Trash2 } from "lucide-react"
 import { useIsMobile } from "@/hooks/use-mobile"
+import { toast } from "sonner"
+import { AI_ACTION_CREDIT_COST, useAiCredits } from "@/hooks/use-ai-credits"
+import { setActiveProductId } from "@/lib/products-engine"
 
 interface ProductCardProps {
   product: {
@@ -19,8 +23,6 @@ interface ProductCardProps {
     profit: number
   }
   index: number
-  aiCreditsRemaining?: number
-  onDeepAnalysis?: (productTitle: string) => void | Promise<void>
   mode?: "default" | "vault"
   statusBadge?: { label: string; tone: "ready" | "pending" }
   onOpenLab?: () => void
@@ -33,15 +35,12 @@ interface ProductCardProps {
   onTogglePriority?: () => void
   onCardClick?: () => void
   onSaveToVault?: () => void
-  isSpendingCredit?: boolean
   actionLabel?: string
 }
 
 export const ProductCard = memo(function ProductCard({
   product,
   index,
-  aiCreditsRemaining = 0,
-  onDeepAnalysis,
   mode = "default",
   statusBadge,
   onOpenLab,
@@ -54,26 +53,28 @@ export const ProductCard = memo(function ProductCard({
   onTogglePriority,
   onCardClick,
   onSaveToVault,
-  isSpendingCredit = false,
   actionLabel,
 }: ProductCardProps) {
   const isMobile = useIsMobile()
-  const [isScanning, setIsScanning] = useState(false)
-
-  useEffect(() => {
-    if (!isSpendingCredit) {
-      setIsScanning(false)
-    }
-  }, [isSpendingCredit])
+  const router = useRouter()
+  const { credits, decrementCredit } = useAiCredits()
 
   const handleDeepAnalysisClick = async (event: MouseEvent<HTMLButtonElement>) => {
+    event.preventDefault()
     event.stopPropagation()
-    if (isScanning || isSpendingCredit) return
-    setIsScanning(true)
-    try {
-      await onDeepAnalysis?.(product.title)
-    } finally {
-      setIsScanning(false)
+
+    const productId = String(product.id)
+
+    if (credits <= 0) {
+      toast.error("You have no credits")
+      return
+    }
+
+    const success = await decrementCredit()
+
+    if (success) {
+      setActiveProductId(productId)
+      router.push(`/dashboard/product/${productId}`)
     }
   }
 
@@ -239,15 +240,14 @@ export const ProductCard = memo(function ProductCard({
 
         {mode === "default" && (
           <motion.button
+            type="button"
             whileHover={isMobile ? undefined : { scale: 1.02, y: -1 }}
             whileTap={{ scale: 0.97 }}
             transition={{ duration: 0.2 }}
             onClick={handleDeepAnalysisClick}
-            disabled={isScanning || isSpendingCredit}
-            className="w-full min-h-11 py-2.5 rounded-xl border border-primary/60 text-primary font-medium text-sm hover:bg-primary hover:text-white disabled:opacity-70 disabled:cursor-not-allowed transition-colors duration-200 inline-flex items-center justify-center gap-1.5 touch-manipulation"
+            className="w-full min-h-11 py-2.5 rounded-xl border border-primary/60 text-primary font-medium text-sm hover:bg-primary hover:text-white transition-colors duration-200 inline-flex items-center justify-center gap-1.5 touch-manipulation"
           >
-            {(isScanning || isSpendingCredit) && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
-            {isScanning || isSpendingCredit ? "Processing..." : actionLabel ?? `Deep Analysis (${aiCreditsRemaining})`}
+            {actionLabel ?? `Deep Analysis (${AI_ACTION_CREDIT_COST})`}
           </motion.button>
         )}
       </div>

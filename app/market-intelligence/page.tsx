@@ -4,16 +4,16 @@ import { useEffect, useMemo, useState } from "react"
 import { AnimatePresence, motion } from "framer-motion"
 import { LazyHeader, LazySidebar } from "@/components/dashboard/lazy-shell"
 import type { Product, SavedProduct } from "@/types/database"
-import { Check, Loader2 } from "lucide-react"
+import { Check } from "lucide-react"
 import { AreaChart, Area, CartesianGrid, ResponsiveContainer, XAxis, YAxis, Tooltip, BarChart, Bar } from "recharts"
 import { getSupabaseClient } from "@/lib/supabase/client"
 import { useAiCredits } from "@/hooks/use-ai-credits"
 import { toast } from "sonner"
 import { useRouter } from "next/navigation"
-import { spendCreditForProductScan } from "@/lib/credit-transactions"
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { silentSyncSpendCredit } from "@/lib/credit-transactions"
 import { useIsMobile } from "@/hooks/use-mobile"
 import { useProducts } from "@/hooks/use-products"
+import { setActiveProductId } from "@/lib/products-engine"
 
 const productCountryMap: Record<string, string> = {}
 const STATIC_TS = "2026-04-28T12:00:00.000Z"
@@ -24,14 +24,11 @@ export default function MarketIntelligencePage() {
   const router = useRouter()
   const isMobile = useIsMobile()
   const [searchQuery, setSearchQuery] = useState("")
-  const { setCredits, decrementCredit, userId: activeUserId } = useAiCredits()
+  const { decrementCredit, isGuest, userId: activeUserId } = useAiCredits()
   const [savedProducts, setSavedProducts] = useState<SavedProduct[]>([])
   const [selectedCountry, setSelectedCountry] = useState<string | null>(null)
   const [hoveredCountry, setHoveredCountry] = useState<string | null>(null)
   const [recentlySavedProductId, setRecentlySavedProductId] = useState<string | null>(null)
-  const [scanningProducts, setScanningProducts] = useState<Record<string, boolean>>({})
-  const [isRedirecting, setIsRedirecting] = useState(false)
-  const [showGuestLock, setShowGuestLock] = useState(false)
   const query = searchQuery.trim().toLowerCase()
   const activeCountry = hoveredCountry ?? selectedCountry
   const { products, isLoading: isLoadingProducts } = useProducts({
@@ -134,50 +131,19 @@ export default function MarketIntelligencePage() {
   }
 
   const handleDeepResearch = async (product: Product) => {
-    const productId = String(product.id ?? "")
+    const productId = String(product.id ?? "").trim()
     if (!productId) {
-      toast.error("Product ID is missing.")
       return
     }
-    if (scanningProducts[productId] || isRedirecting) return
-    setScanningProducts((current) => ({ ...current, [productId]: true }))
-    if (!product?.id) {
-      toast.error("Product ID is missing.")
-      setScanningProducts((current) => ({ ...current, [productId]: false }))
+    if (!(await decrementCredit())) {
+      toast.error("You don't have enough credits.")
       return
     }
-    const client = getSupabaseClient()
-
-    if (!activeUserId) {
-      const creditSpent = await decrementCredit()
-      if (!creditSpent) {
-        setScanningProducts((current) => ({ ...current, [productId]: false }))
-        setShowGuestLock(true)
-        return
-      }
-      toast.success("Guest deep research started.")
-      setIsRedirecting(true)
-      window.location.href = `/products/${productId}`
-      return
+    if (!isGuest) {
+      silentSyncSpendCredit(productId)
     }
-
-    const result = await spendCreditForProductScan(client, activeUserId, productId)
-    if (!result.ok) {
-      if (result.reason === "duplicate") {
-        toast.info("Research already started. Please wait a moment.")
-      } else if (result.reason === "insufficient_credits") {
-        toast.error("Insufficient credits.")
-      } else {
-        toast.error("Could not start research. Please try again.")
-      }
-      setScanningProducts((current) => ({ ...current, [productId]: false }))
-      return
-    }
-
-    void setCredits(result.remainingCredits)
-    toast.success("Analyzing product... 1 credit used.")
-    setIsRedirecting(true)
-    window.location.href = `/products/${productId}`
+    setActiveProductId(productId)
+    router.push(`/products/${productId}`)
   }
 
   return (
@@ -322,8 +288,6 @@ export default function MarketIntelligencePage() {
                       ))
                     : opportunityRows.map(({ product, predictedProfit, saturationScore }) => {
                     const isSaved = savedProducts.some((item) => item.product_id === product.id)
-                    const productId = String(product.id)
-                    const isResearching = Boolean(scanningProducts[productId]) || isRedirecting
                     return (
                       <tr key={product.id} className="border-b border-border/60">
                         <td className="py-3 pr-3 font-medium text-foreground">{product.name}</td>
@@ -338,12 +302,11 @@ export default function MarketIntelligencePage() {
                             <AnimatePresence>{recentlySavedProductId === product.id && <motion.span initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute inset-0 z-0">{[...Array(8)].map((_, i) => <motion.span key={i} className="absolute left-1/2 top-1/2 w-1 h-1 rounded-full bg-violet-300" initial={{ x: 0, y: 0, opacity: 1, scale: 1 }} animate={{ x: Math.cos((i / 8) * Math.PI * 2) * 18, y: Math.sin((i / 8) * Math.PI * 2) * 12, opacity: 0, scale: 0.2 }} transition={{ duration: 0.45 }} />)}</motion.span>}</AnimatePresence>
                           </motion.button>
                           <button
+                            type="button"
                             onClick={() => handleDeepResearch(product)}
-                            disabled={isResearching}
-                            className="px-3 py-1.5 min-h-11 rounded-lg border border-border text-foreground hover:border-primary/50 disabled:opacity-70 disabled:cursor-not-allowed transition-colors duration-200 inline-flex items-center gap-1.5 touch-manipulation"
+                            className="px-3 py-1.5 min-h-11 rounded-lg border border-border text-foreground hover:border-primary/50 active:opacity-95 transition-colors duration-200 inline-flex items-center gap-1.5 touch-manipulation"
                           >
-                            {isResearching && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
-                            {isResearching ? "Processing..." : "Deep Research (-1)"}
+                            Deep Research (-1)
                           </button>
                         </div></td>
                       </tr>
@@ -355,29 +318,6 @@ export default function MarketIntelligencePage() {
           </motion.section>
         </div>
       </main>
-      {isRedirecting && (
-        <div className="fixed inset-0 z-[90] bg-black/60 max-md:bg-black/75 flex items-center justify-center">
-          <div className="rounded-xl border border-primary/30 bg-slate-950/90 px-5 py-3 text-sm text-foreground">
-            Processing...
-          </div>
-        </div>
-      )}
-      <Dialog open={showGuestLock} onOpenChange={setShowGuestLock}>
-        <DialogContent className="glass-panel border border-primary/30 bg-slate-950/95">
-          <DialogHeader>
-            <DialogTitle className="text-foreground">Guest Access Locked</DialogTitle>
-            <DialogDescription>Your 3 free scans are finished. Sign up now to claim 300 credits.</DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <button
-              onClick={() => router.push("/signup")}
-              className="px-4 py-2 rounded-lg bg-gradient-to-r from-violet-600 to-purple-500 text-white"
-            >
-              Sign up to claim 300 Credits
-            </button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
       <div className="fixed inset-0 pointer-events-none -z-0 max-md:hidden">
         <motion.div className="absolute -top-28 left-1/4 w-[30rem] h-[30rem] rounded-full blur-[130px] bg-violet-500/20" animate={{ x: [0, 40, -20, 0], y: [0, -20, 25, 0] }} transition={{ duration: 34, repeat: Infinity, ease: "easeInOut" }} />
         <motion.div className="absolute bottom-[-10rem] right-1/4 w-[32rem] h-[32rem] rounded-full blur-[140px] bg-indigo-500/20" animate={{ x: [0, -35, 18, 0], y: [0, 12, -18, 0] }} transition={{ duration: 38, repeat: Infinity, ease: "easeInOut" }} />

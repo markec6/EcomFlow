@@ -2,24 +2,16 @@
 
 import Image from "next/image"
 import { ChangeEvent, FormEvent, useEffect, useRef, useState } from "react"
-import { Loader2, Lock, Mail, Shield, Trash2, UserRound } from "lucide-react"
+import { Loader2, Lock, Mail, Shield, UserRound } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { Sidebar } from "@/components/dashboard/sidebar"
 import { Header } from "@/components/dashboard/header"
 import { Switch } from "@/components/ui/switch"
 import { useAuth, useUser } from "@clerk/nextjs"
 import { toast } from "sonner"
-import { clearClientSessionData, useAiCredits } from "@/hooks/use-ai-credits"
+import { useAiCredits } from "@/hooks/use-ai-credits"
 import { getSupabaseClient } from "@/lib/supabase/client"
 import { useTheme } from "next-themes"
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog"
 
 const PROFILE_EVENT = "ecomflow-profile-sync"
 
@@ -55,7 +47,7 @@ function SettingsCard({
 
 export default function SettingsPage() {
   const router = useRouter()
-  const { userId: clerkUserId, isSignedIn, signOut } = useAuth()
+  const { userId, isSignedIn } = useAuth()
   const { user } = useUser()
   const { setTheme } = useTheme()
   const [searchQuery, setSearchQuery] = useState("")
@@ -63,8 +55,6 @@ export default function SettingsPage() {
   const [savingInfo, setSavingInfo] = useState(false)
   const [savingPreferences, setSavingPreferences] = useState(false)
   const [sendingReset, setSendingReset] = useState(false)
-  const [deletingAccount, setDeletingAccount] = useState(false)
-  const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false)
   const [showChangePasswordForm, setShowChangePasswordForm] = useState(false)
   const [currentPassword, setCurrentPassword] = useState("")
   const [newPassword, setNewPassword] = useState("")
@@ -89,7 +79,7 @@ export default function SettingsPage() {
   useEffect(() => {
     const loadSettings = async () => {
       const supabase = getSupabaseClient()
-      if (!supabase || !isSignedIn || !clerkUserId) {
+      if (!supabase || !isSignedIn || !userId) {
         setLoadingSettings(false)
         return
       }
@@ -98,14 +88,14 @@ export default function SettingsPage() {
       let { data, error } = await supabase
         .from("profiles")
         .select("full_name,public_bio,avatar_url,theme_preference,dark_mode,email_alerts,public_profile")
-        .eq("id", clerkUserId)
+        .eq("id", userId)
         .single()
 
       if (error && String(error.message ?? "").toLowerCase().includes("theme_preference")) {
         const fallback = await supabase
           .from("profiles")
           .select("full_name,public_bio,avatar_url,dark_mode,email_alerts,public_profile")
-          .eq("id", clerkUserId)
+          .eq("id", userId)
           .single()
         data = fallback.data
         error = fallback.error
@@ -137,7 +127,7 @@ export default function SettingsPage() {
 
     void loadSettings()
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [clerkUserId, isSignedIn, user?.imageUrl, user?.primaryEmailAddress?.emailAddress])
+  }, [userId, isSignedIn, user?.imageUrl, user?.primaryEmailAddress?.emailAddress])
   // Note: setTheme intentionally excluded from deps — storing it in setThemeRef prevents
   // this effect from re-firing on every theme change, which was causing the 2-second revert.
 
@@ -205,7 +195,7 @@ export default function SettingsPage() {
     event.preventDefault()
     setSavingInfo(true)
     const supabase = getSupabaseClient()
-    if (!supabase || !clerkUserId) {
+    if (!supabase || !userId) {
       setSavingInfo(false)
       toast.error("Please log in to update your profile.")
       return
@@ -219,7 +209,7 @@ export default function SettingsPage() {
         full_name: nextFullName || null,
         public_bio: nextPublicBio || null,
       })
-      .eq("id", clerkUserId)
+      .eq("id", userId)
       .select("id")
       .maybeSingle()
 
@@ -239,7 +229,7 @@ export default function SettingsPage() {
   ): Promise<boolean> => {
     setSavingPreferences(true)
     const supabase = getSupabaseClient()
-    if (!supabase || !clerkUserId) {
+    if (!supabase || !userId) {
       setSavingPreferences(false)
       return false
     }
@@ -247,7 +237,7 @@ export default function SettingsPage() {
     const profilesTable = supabase.from("profiles") as any
     const { error } = await profilesTable.upsert(
       {
-        id: clerkUserId,
+        id: userId,
         email_alerts: nextEmailAlerts,
         public_profile: nextPublicProfile,
       },
@@ -293,45 +283,6 @@ export default function SettingsPage() {
       toast.error(message ?? "Could not change password.")
     } finally {
       setSendingReset(false)
-    }
-  }
-
-  const handleDeleteAccount = async () => {
-    if (!isSignedIn || !clerkUserId) {
-      toast.error("Nisi logovan")
-      return
-    }
-
-    setDeletingAccount(true)
-    try {
-      const response = await fetch("/api/account/delete", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-      })
-      const result = (await response.json().catch(() => null)) as
-        | { ok?: boolean; error?: string }
-        | null
-      if (!response.ok || !result?.ok) {
-        throw new Error(result?.error ?? "Could not delete account.")
-      }
-
-      await signOut().catch(() => {
-        // Account is already removed server-side; continue local cleanup.
-      })
-      clearClientSessionData()
-      window.localStorage.setItem("guest_credits", "3")
-      window.sessionStorage.setItem("guest_credits", "3")
-      setConfirmDeleteOpen(false)
-      toast.success("Account deleted.")
-      router.replace("/")
-      router.refresh()
-    } catch (error) {
-      const message =
-        (error as Error | undefined)?.message ??
-        (error as { errors?: { message?: string }[] } | undefined)?.errors?.[0]?.message
-      toast.error(message ?? "Could not delete account.")
-    } finally {
-      setDeletingAccount(false)
     }
   }
 
@@ -572,22 +523,6 @@ export default function SettingsPage() {
                   </button>
                 </div>
               )}
-            <div className="rounded-xl border border-rose-400/20 bg-rose-500/5 p-4">
-              <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-                <div>
-                  <p className="text-sm font-semibold text-rose-200">Danger Zone</p>
-                  <p className="text-xs text-rose-100/70 mt-1">Deleting an account is permanent and removes profile access.</p>
-                </div>
-                <button
-                  onClick={() => setConfirmDeleteOpen(true)}
-                  disabled={deletingAccount}
-                  className="px-4 py-2 rounded-xl border border-rose-400/30 bg-rose-500/10 text-rose-200 disabled:opacity-70 inline-flex items-center justify-center gap-2"
-                >
-                  {deletingAccount ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
-                  {deletingAccount ? "Preparing..." : "Delete Account"}
-                </button>
-              </div>
-            </div>
             </div>
           </SettingsCard>
 
@@ -597,34 +532,6 @@ export default function SettingsPage() {
           </div>
         </div>
       </main>
-
-      <Dialog open={confirmDeleteOpen} onOpenChange={setConfirmDeleteOpen}>
-        <DialogContent className="glass-panel border border-rose-400/30 bg-slate-950/95">
-          <DialogHeader>
-            <DialogTitle className="text-foreground">Delete account?</DialogTitle>
-            <DialogDescription>
-              This will permanently remove your Clerk account and Supabase profile. This action cannot be undone.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <button
-              onClick={() => setConfirmDeleteOpen(false)}
-              className="px-4 py-2 rounded-lg border border-primary/30 text-primary"
-              disabled={deletingAccount}
-            >
-              Cancel
-            </button>
-            <button
-              onClick={handleDeleteAccount}
-              disabled={deletingAccount}
-              className="px-4 py-2 rounded-lg bg-rose-600 text-white disabled:opacity-70 inline-flex items-center gap-2"
-            >
-              {deletingAccount && <Loader2 className="w-4 h-4 animate-spin" />}
-              {deletingAccount ? "Deleting..." : "Yes, delete account"}
-            </button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </div>
   )
 }
