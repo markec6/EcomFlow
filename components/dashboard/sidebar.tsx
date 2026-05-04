@@ -9,18 +9,18 @@ import {
   FlaskConical,
   BarChart3,
   Settings,
-  Sparkles,
 } from "lucide-react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { cn } from "@/lib/utils"
+import { AiNeuralLinkSidebarModal } from "@/components/dashboard/ai-neural-link-sidebar-modal"
 import { useSidebarState } from "@/components/dashboard/sidebar-state"
 
 const navItems = [
   { icon: House, ariaLabel: "Dashboard", href: "/dashboard" },
   { icon: Globe, ariaLabel: "Market Intelligence", href: "/market-intelligence" },
   { icon: Gem, ariaLabel: "Vault", href: "/vault" },
-  { icon: FlaskConical, ariaLabel: "Outreach Lab", href: "/outreach-lab" },
+  { icon: FlaskConical, ariaLabel: "Lab", href: "/dashboard/lab" },
   { icon: BarChart3, ariaLabel: "Competitor Spy", href: "/competitors" },
   { icon: Settings, ariaLabel: "Settings", href: "/settings" },
 ]
@@ -76,13 +76,7 @@ export const Sidebar = memo(function Sidebar() {
       </nav>
 
       <div className={cn("absolute bottom-4 left-0 right-0 px-2 transition-opacity duration-300", isOpen ? "opacity-100" : "opacity-0 pointer-events-none")}>
-        <button
-          type="button"
-          className="w-11 h-11 rounded-xl bg-gradient-to-br from-primary to-indigo-600 flex items-center justify-center glow-violet group transition-all duration-300 hover:scale-110 hover:-translate-y-1 touch-manipulation mx-auto"
-          aria-label="AI tools"
-        >
-          <Sparkles className="w-5 h-5 text-white group-hover:animate-pulse" />
-        </button>
+        <AiNeuralLinkSidebarModal />
       </div>
       </aside>
     </>
