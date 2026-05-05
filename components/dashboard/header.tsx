@@ -4,7 +4,7 @@ import { memo, useEffect, useMemo, useState } from "react"
 import { AnimatePresence, motion } from "framer-motion"
 import { Search, Bell, Zap, LogOut, UserCircle2, Settings, ChevronLeft, Menu } from "lucide-react"
 import { clearClientSessionData, useAiCredits } from "@/hooks/use-ai-credits"
-import { useAuth, useUser } from "@clerk/nextjs"
+import { SignInButton, UserButton, useAuth, useUser } from "@clerk/nextjs"
 import { useRouter } from "next/navigation"
 import { useIsMobile } from "@/hooks/use-mobile"
 import { useSidebarState } from "@/components/dashboard/sidebar-state"
@@ -187,6 +187,30 @@ export const Header = memo(function Header({ searchQuery, onSearchChange }: Head
         </div>
       </motion.div>
 
+      <div className="flex shrink-0 items-center gap-2 lg:hidden">
+        {!authLoaded ? (
+          <div className="h-10 w-[4.5rem] rounded-xl glass-panel border border-primary/20 animate-pulse" aria-hidden />
+        ) : isSignedIn ? (
+          <UserButton
+            afterSignOutUrl="/login"
+            appearance={{
+              elements: {
+                avatarBox: "w-10 h-10",
+              },
+            }}
+          />
+        ) : (
+          <SignInButton mode="redirect" forceRedirectUrl="/dashboard">
+            <button
+              type="button"
+              className="rounded-xl border border-primary/30 bg-gradient-to-r from-violet-600 to-purple-500 px-3 py-2 text-xs font-semibold text-white touch-manipulation"
+            >
+              Sign in
+            </button>
+          </SignInButton>
+        )}
+      </div>
+
       <button
         type="button"
         onClick={() => setIsMobileMenuOpen((open) => !open)}
@@ -355,12 +379,22 @@ export const Header = memo(function Header({ searchQuery, onSearchChange }: Head
               )}
 
               {isSignedIn ? (
-                <button
-                  onClick={() => router.push("/settings")}
-                  className="w-full min-h-11 rounded-xl border border-white/10 px-3 py-2 text-sm text-foreground touch-manipulation"
-                >
-                  Open Settings
-                </button>
+                <>
+                  <button
+                    type="button"
+                    onClick={() => router.push("/settings")}
+                    className="w-full min-h-11 rounded-xl border border-white/10 px-3 py-2 text-sm text-foreground touch-manipulation"
+                  >
+                    Open Settings
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void handleLogout()}
+                    className="w-full min-h-11 rounded-xl border border-white/10 px-3 py-2 text-sm text-foreground touch-manipulation"
+                  >
+                    Log out
+                  </button>
+                </>
               ) : (
                 <button
                   onClick={() => router.push("/login")}

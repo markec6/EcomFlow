@@ -4,6 +4,8 @@ import { Analytics } from '@vercel/analytics/next'
 import { RootProviders } from '@/components/root-providers'
 import './globals.css'
 
+export const dynamic = 'force-dynamic'
+
 const inter = Inter({ subsets: ["latin"], variable: "--font-inter" });
 const geistMono = Geist_Mono({ subsets: ["latin"], variable: "--font-mono" });
 
