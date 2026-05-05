@@ -4,12 +4,6 @@ import { Analytics } from '@vercel/analytics/next'
 import { RootProviders } from '@/components/root-providers'
 import './globals.css'
 
-const clerkPublishableKey = process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY
-
-if (!clerkPublishableKey) {
-  console.error("Missing NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY")
-}
-
 const inter = Inter({ subsets: ["latin"], variable: "--font-inter" });
 const geistMono = Geist_Mono({ subsets: ["latin"], variable: "--font-mono" });
 
@@ -44,7 +38,9 @@ export default function RootLayout({
   return (
     <html lang="en" className="bg-background" suppressHydrationWarning={true}>
       <body className={`${inter.variable} ${geistMono.variable} font-sans antialiased`} suppressHydrationWarning={true}>
-        <RootProviders publishableKey={clerkPublishableKey}>{children}</RootProviders>
+        <RootProviders publishableKey={process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY}>
+          {children}
+        </RootProviders>
         {process.env.NODE_ENV === 'production' && <Analytics />}
       </body>
     </html>

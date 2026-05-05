@@ -2,7 +2,7 @@
 
 import { memo, useEffect, useMemo, useState } from "react"
 import { AnimatePresence, motion } from "framer-motion"
-import { Search, Bell, Command, Zap, LogOut, UserCircle2, Settings, ChevronLeft, Menu } from "lucide-react"
+import { Search, Bell, Zap, LogOut, UserCircle2, Settings, ChevronLeft, Menu } from "lucide-react"
 import { clearClientSessionData, useAiCredits } from "@/hooks/use-ai-credits"
 import { useAuth, useUser } from "@clerk/nextjs"
 import { useRouter } from "next/navigation"
@@ -48,7 +48,12 @@ export const Header = memo(function Header({ searchQuery, onSearchChange }: Head
 
     const fetchProfileAvatar = async () => {
       try {
-        // localStorage avatar always wins — set it immediately, no Supabase round-trip needed.
+        if (!isSignedIn || !clerkUserId) {
+          setAvatarUrl(null)
+          return
+        }
+
+        // localStorage avatar only applies while signed in — set it immediately, no Supabase round-trip needed.
         const localAvatar = typeof window !== "undefined" ? localStorage.getItem("ecomflow_avatar_url") : null
         if (localAvatar) {
           setAvatarUrl(localAvatar)
@@ -56,11 +61,6 @@ export const Header = memo(function Header({ searchQuery, onSearchChange }: Head
         }
 
         setAvatarUrl((current) => current ?? fallbackAvatarUrl)
-
-        if (!isSignedIn || !clerkUserId) {
-          setAvatarUrl(fallbackAvatarUrl)
-          return
-        }
 
         const supabase = getSupabaseClient()
         if (!supabase) {
@@ -85,6 +85,10 @@ export const Header = memo(function Header({ searchQuery, onSearchChange }: Head
     void fetchProfileAvatar()
 
     const profileEventListener = (event: Event) => {
+      if (!isSignedIn || !clerkUserId) {
+        setAvatarUrl(null)
+        return
+      }
       const nextAvatarUrl = (event as CustomEvent<{ avatarUrl?: string }>).detail?.avatarUrl
       if (nextAvatarUrl) {
         setAvatarUrl(nextAvatarUrl)
@@ -102,6 +106,12 @@ export const Header = memo(function Header({ searchQuery, onSearchChange }: Head
   const handleLogout = async () => {
     await signOut()
     clearClientSessionData()
+    try {
+      if (typeof window !== "undefined") localStorage.removeItem("ecomflow_avatar_url")
+    } catch {
+      /* ignore */
+    }
+    setAvatarUrl(null)
     toast.success("Logged out successfully.")
     window.location.href = "/login"
   }
@@ -116,7 +126,7 @@ export const Header = memo(function Header({ searchQuery, onSearchChange }: Head
     [profile.fullName, profile.username, sessionEmail]
   )
 
-  const avatarNode = avatarUrl ? (
+  const avatarNode = isSignedIn && avatarUrl ? (
     <img
       key={avatarUrl}
       src={avatarUrl}
@@ -160,21 +170,20 @@ export const Header = memo(function Header({ searchQuery, onSearchChange }: Head
         animate={isMobile ? undefined : { y: 0, opacity: 1 }}
         className="flex-1 min-w-0 max-w-3xl mx-auto"
       >
-        <div className="relative group">
-          <Search className="absolute left-3 md:left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground group-focus-within:text-primary transition-colors" />
+        <div className="relative group overflow-hidden rounded-xl">
+          <Search className="pointer-events-none absolute left-3 md:left-4 top-1/2 z-[2] -translate-y-1/2 w-4 h-4 text-muted-foreground group-focus-within:text-primary transition-colors" />
           <input
             type="text"
             placeholder="Search..."
             value={searchQuery}
             onChange={(event) => onSearchChange(event.target.value)}
-            className="w-full h-10 pl-9 md:pl-11 pr-3 md:pr-20 rounded-xl glass-panel text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary/50 focus:ring-2 focus:ring-primary/20 transition-all"
+            className="relative z-0 w-full h-10 pl-9 md:pl-11 pr-4 md:pr-5 rounded-xl glass-panel text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary/50 focus:ring-2 focus:ring-primary/20 transition-all"
           />
-          <div className="hidden md:flex absolute right-3 top-1/2 -translate-y-1/2 items-center gap-1 text-xs text-muted-foreground">
-            <kbd className="px-1.5 py-0.5 rounded bg-muted border border-border font-mono">
-              <Command className="w-3 h-3 inline" />
-            </kbd>
-            <kbd className="px-1.5 py-0.5 rounded bg-muted border border-border font-mono">K</kbd>
-          </div>
+          {/* Decorative right-edge fade + soft inner shadow; no pointer / semantic role */}
+          <div
+            aria-hidden
+            className="pointer-events-none absolute inset-y-0 right-0 z-[1] w-11 sm:w-14 rounded-r-xl bg-gradient-to-l from-card/90 via-card/35 to-transparent shadow-[inset_-6px_0_12px_-4px_rgba(0,0,0,0.07)] transition-[width,opacity,box-shadow,background-image] duration-300 dark:from-card/70 dark:via-card/20 dark:shadow-[inset_-6px_0_14px_-4px_rgba(0,0,0,0.42)] group-focus-within:w-14 sm:group-focus-within:w-16 group-focus-within:from-primary/[0.14] group-focus-within:via-primary/[0.04] group-focus-within:shadow-[inset_-10px_0_22px_-6px_color-mix(in_srgb,var(--primary)_22%,transparent)]"
+          />
         </div>
       </motion.div>
 
