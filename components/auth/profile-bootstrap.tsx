@@ -18,7 +18,7 @@ function needsSignupGrant(raw: unknown): boolean {
  * — Prime Clerk JWT for Supabase (`template: 'supabase'`).
  * — Ensure a `profiles` row exists (`ensureSupabaseProfile`).
  * — If `ai_credits_remaining` is still null / 0, write SIGNUP_CREDIT_GRANT (300) immediately.
- * Guest wallets stay in localStorage (`use-ai-credits.tsx`).
+ * Guest credits are session-only in `use-ai-credits.tsx` (no persistence).
  */
 export function ProfileBootstrap() {
   const { isLoaded, isSignedIn, userId, getToken } = useAuth()

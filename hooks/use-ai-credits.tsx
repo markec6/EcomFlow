@@ -60,39 +60,12 @@ function needsSignupGrant(raw: unknown): boolean {
   return !Number.isFinite(n)
 }
 
+/** Clears non-auth client keys (e.g. after logout). Guest credits are not persisted — legacy wallet key is removed. */
 export function clearClientSessionData() {
   if (typeof window === "undefined") return
   try {
-    localStorage.setItem(GUEST_LOCAL_KEY, String(GUEST_INITIAL))
+    localStorage.removeItem(GUEST_LOCAL_KEY)
     localStorage.removeItem("ecomflow_active_product_id")
-  } catch {
-    /* ignore */
-  }
-}
-
-function readGuestCreditsFromDisk(): number {
-  if (typeof window === "undefined") return GUEST_INITIAL
-  try {
-    const raw = localStorage.getItem(GUEST_LOCAL_KEY)
-    if (raw == null || raw === "") {
-      localStorage.setItem(GUEST_LOCAL_KEY, String(GUEST_INITIAL))
-      return GUEST_INITIAL
-    }
-    const n = Number(raw)
-    if (!Number.isFinite(n)) {
-      localStorage.setItem(GUEST_LOCAL_KEY, String(GUEST_INITIAL))
-      return GUEST_INITIAL
-    }
-    return Math.max(0, Math.min(GUEST_CEILING, Math.round(n)))
-  } catch {
-    return GUEST_INITIAL
-  }
-}
-
-function persistGuestCredits(n: number) {
-  try {
-    const v = Math.max(0, Math.min(GUEST_CEILING, Math.round(n)))
-    localStorage.setItem(GUEST_LOCAL_KEY, String(v))
   } catch {
     /* ignore */
   }
@@ -109,6 +82,8 @@ export function AiCreditsProvider({ children }: { children: ReactNode }) {
   const [isReady, setIsReady] = useState(false)
   const creditsRef = useRef(SIGNUP_CREDIT_GRANT)
   const guestOnlyRef = useRef(true)
+  /** Tracks prior signed-in state so guest wallet resets on session start / logout only — not on guest `pullDisplayFromSources` churn. */
+  const prevIsSignedInRef = useRef<boolean | null>(null)
 
   useEffect(() => {
     creditsRef.current = credits
@@ -117,17 +92,22 @@ export function AiCreditsProvider({ children }: { children: ReactNode }) {
   const pullDisplayFromSources = useCallback(async () => {
     if (!authReady) return
 
-    /* ---- GUEST: !signed-in ------------------------------------------------ */
+    /* ---- GUEST: !signed-in (session-only wallet; full grant only on new guest session or after logout) */
     if (!isSignedIn || !clerkSubject) {
       guestOnlyRef.current = true
-      const g = readGuestCreditsFromDisk()
-      creditsRef.current = g
-      setCreditsState(g)
+      const wasSignedIn = prevIsSignedInRef.current === true
+      const firstGuestResolve = prevIsSignedInRef.current === null
+      prevIsSignedInRef.current = false
+      if (wasSignedIn || firstGuestResolve) {
+        creditsRef.current = GUEST_INITIAL
+        setCreditsState(GUEST_INITIAL)
+      }
       setIsReady(true)
       return
     }
 
     guestOnlyRef.current = false
+    prevIsSignedInRef.current = true
 
     const supabase = getSupabaseClient()
     if (!user || !supabase) {
@@ -205,7 +185,7 @@ export function AiCreditsProvider({ children }: { children: ReactNode }) {
   }, [pullDisplayFromSources])
 
   /*
-   * SPENDING RULE: balance > 0 → subtract PRICE (1) → persist guest LS or signed Supabase.
+   * SPENDING RULE: balance > 0 → subtract PRICE (1); guests in-memory only, signed-in → Supabase.
    */
   const decrementCredit = useCallback(async (): Promise<boolean> => {
     if (!(creditsRef.current > 0)) {
@@ -214,7 +194,6 @@ export function AiCreditsProvider({ children }: { children: ReactNode }) {
 
     if (guestOnlyRef.current) {
       const guestNext = Math.max(0, Math.min(GUEST_CEILING, creditsRef.current - UNIT_PRICE))
-      persistGuestCredits(guestNext)
       creditsRef.current = guestNext
       setCreditsState(guestNext)
       return true
@@ -260,7 +239,6 @@ export function AiCreditsProvider({ children }: { children: ReactNode }) {
 
       if (guestOnlyRef.current) {
         const guestVal = Math.max(0, Math.min(GUEST_CEILING, normalized))
-        persistGuestCredits(guestVal)
         creditsRef.current = guestVal
         setCreditsState(guestVal)
         return
@@ -313,7 +291,7 @@ export function AiCreditsProvider({ children }: { children: ReactNode }) {
 
   const value: AiCreditsContextValue = {
     credits,
-    maxCredits: SIGNUP_CREDIT_GRANT,
+    maxCredits: visitor ? GUEST_CEILING : SIGNUP_CREDIT_GRANT,
     guestCreditHeaderSummary,
     isReady,
     isGuest: visitor,
