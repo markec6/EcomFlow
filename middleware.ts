@@ -1,14 +1,24 @@
 export const runtime = 'nodejs'
 
 import { clerkMiddleware } from "@clerk/nextjs/server"
+import { NextResponse } from "next/server"
 
 const clerk = clerkMiddleware()
 
-export default function middleware(
-  ...args: Parameters<typeof clerk>
+export default async function middleware(
+  req: Parameters<typeof clerk>[0],
+  event: Parameters<typeof clerk>[1],
 ) {
-  console.log("[middleware]", args[0].method, args[0].nextUrl.pathname)
-  return clerk(...args)
+  if (req.nextUrl.searchParams.has('__clerk_handshake')) { return NextResponse.next(); }
+
+  console.log("[middleware]", req.method, req.nextUrl.pathname)
+  console.log("CLERK KEY EXISTS:", !!process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY)
+
+  try {
+    return await clerk(req, event)
+  } catch {
+    return NextResponse.next()
+  }
 }
 
 export const config = {
