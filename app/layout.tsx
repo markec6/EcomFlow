@@ -40,7 +40,7 @@ export default function RootLayout({
   return (
     <html lang="en" className="bg-background" suppressHydrationWarning={true}>
       <body className={`${inter.variable} ${geistMono.variable} font-sans antialiased`} suppressHydrationWarning={true}>
-        <RootProviders publishableKey={process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY}>
+        <RootProviders publishableKey={process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY ?? ''}>
           {children}
         </RootProviders>
         {process.env.NODE_ENV === 'production' && <Analytics />}

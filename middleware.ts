@@ -1,6 +1,15 @@
+export const runtime = 'nodejs'
+
 import { clerkMiddleware } from "@clerk/nextjs/server"
 
-export default clerkMiddleware()
+const clerk = clerkMiddleware()
+
+export default function middleware(
+  ...args: Parameters<typeof clerk>
+) {
+  console.log("[middleware]", args[0].method, args[0].nextUrl.pathname)
+  return clerk(...args)
+}
 
 export const config = {
   matcher: [

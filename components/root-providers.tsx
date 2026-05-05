@@ -11,12 +11,13 @@ import { AiCreditsProvider } from "@/hooks/use-ai-credits"
 
 type RootProvidersProps = {
   children: ReactNode
-  publishableKey: string | undefined
+  publishableKey?: string
 }
 
 export function RootProviders({ children, publishableKey }: RootProvidersProps) {
+  const key = publishableKey ?? ''
   return (
-    <ClerkProvider publishableKey={publishableKey}>
+    <ClerkProvider publishableKey={key}>
       <SupabaseClerkTokenBridge />
       <ThemeProvider attribute="class" defaultTheme="dark" enableSystem={false}>
         <AiCreditsProvider>
