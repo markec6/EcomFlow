@@ -49,7 +49,7 @@ export default function SettingsPage() {
   const router = useRouter()
   const { userId, isSignedIn } = useAuth()
   const { user } = useUser()
-  const { setTheme } = useTheme()
+  const { setTheme, resolvedTheme } = useTheme()
   const [searchQuery, setSearchQuery] = useState("")
   const [uploading, setUploading] = useState(false)
   const [savingInfo, setSavingInfo] = useState(false)
@@ -75,6 +75,16 @@ export default function SettingsPage() {
   // Keep setTheme in a ref so loadSettings never re-runs when the theme changes.
   const setThemeRef = useRef(setTheme)
   useEffect(() => { setThemeRef.current = setTheme })
+
+  // Immediately sync the switch with next-themes' resolved theme on mount.
+  // This runs synchronously on the first client frame (before the async
+  // loadSettings Supabase call completes), eliminating the dead-first-click
+  // caused by the hardcoded useState(true) initial value.
+  useEffect(() => {
+    if (resolvedTheme === "dark" || resolvedTheme === "light") {
+      setDarkMode(resolvedTheme === "dark")
+    }
+  }, [resolvedTheme])
 
   useEffect(() => {
     const loadSettings = async () => {
